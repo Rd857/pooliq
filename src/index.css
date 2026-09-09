@@ -1,0 +1,54 @@
+:root {
+  --piq-primary: #2e75b6;
+  --piq-primary-dark: #1f4e79;
+  --piq-bg: #f4f7fa;
+  --piq-card-bg: #ffffff;
+  --piq-text: #1a2733;
+  --piq-text-muted: #5b6b78;
+  --piq-border: #e0e6eb;
+  --piq-green: #2e7d32;
+  --piq-green-bg: #e8f5e9;
+  --piq-yellow: #f9a825;
+  --piq-yellow-bg: #fff8e1;
+  --piq-red: #c62828;
+  --piq-red-bg: #ffebee;
+  --piq-gray: #9e9e9e;
+  --piq-nav-height: 64px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--piq-bg);
+  color: var(--piq-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+    "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
+    "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
+    monospace;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+input[type="number"],
+input[type="text"] {
+  font-size: 1rem;
+}

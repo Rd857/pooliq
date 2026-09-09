@@ -1,0 +1,40 @@
+# Dependencies
+/node_modules
+/functions/node_modules
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Production build
+/build
+
+# Environment / secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Firebase service account credentials — never commit these
+*serviceAccount*.json
+*firebase-adminsdk*.json
+*.pem
+
+# Firebase local emulator / cache
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Cloudflare Workers
+.wrangler/
+
+# OS / editor
+.DS_Store
+.vscode/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
