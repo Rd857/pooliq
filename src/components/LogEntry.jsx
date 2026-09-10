@@ -9,6 +9,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { getCurrentWeather } from "../lib/ambientWeather";
 
 const NUMERIC_FIELDS = [
   { key: "pH", label: "pH", step: 0.1, placeholder: "7.4" },
@@ -92,6 +93,16 @@ export default function LogEntry({ onSaved }) {
       const toNumberOrNull = (v) =>
         v === "" || v === undefined || v === null ? null : Number(v);
 
+      // Snapshot current weather at the moment of logging so the Sheets sync
+      // (Cloud Function) can fill in the warranty sheet's weather columns
+      // (M-R) with what the conditions actually were at this reading, not
+      // just whatever the dashboard happens to show later. Best-effort: if
+      // the Worker isn't configured or the fetch fails, weather is just
+      // omitted from the doc and the Sheet's M-R cells are left blank.
+      const weather = await getCurrentWeather().catch(() => ({
+        available: false,
+      }));
+
       await addDoc(collection(db, "logs"), {
         date,
         time,
@@ -105,6 +116,16 @@ export default function LogEntry({ onSaved }) {
         waterTemp: toNumberOrNull(values.waterTemp),
         testedBy: testedBy || "Ryan",
         notes: notes || "",
+        weatherAirTempF: weather.available ? weather.tempf ?? null : null,
+        weatherHumidityPct: weather.available ? weather.humidity ?? null : null,
+        weatherUvIndex: weather.available ? weather.uv ?? null : null,
+        weatherRainIn: weather.available ? weather.dailyrainin ?? null : null,
+        weatherSolarRad: weather.available
+          ? weather.solarradiation ?? null
+          : null,
+        weatherWindMph: weather.available
+          ? weather.windspeedmph ?? null
+          : null,
         createdAt: serverTimestamp(),
       });
 

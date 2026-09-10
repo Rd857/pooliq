@@ -15,8 +15,9 @@
  *
  * What it does: a Firestore trigger fires whenever a new document is
  * created in the `logs` collection, and appends one row to the target
- * Google Sheet, in the exact column order of the existing
- * pool_chemistry_tracker.xlsx warranty sheet:
+ * Google Sheet ("PoolIQ", a copy of the original pool_chemistry_tracker
+ * warranty sheet — see https://docs.google.com/spreadsheets/d/1G67uahgg1Gd4wiDN8HvfUEgTx3J2RK6RjJgFUCu4SoM),
+ * in its exact column order:
  *
  *   A Date (MM/dd/yyyy)
  *   B Time (h:mm a)
@@ -30,6 +31,21 @@
  *   J Water Temp (°F)
  *   K Tested By
  *   L Notes
+ *   M Air Temp (°F)
+ *   N Humidity (%)
+ *   O UV Index
+ *   P Weekly Rain (in) — actually the daily-rain-to-date reading from
+ *     Ambient Weather (`dailyrainin`); the sheet's header predates this
+ *     sync and calls it "Weekly", left as-is to match the existing tab.
+ *   Q Solar Rad (W/m^2)
+ *   R Wind (mph)
+ *
+ * M-R come from a best-effort weather snapshot LogEntry.jsx takes at the
+ * moment of logging (see src/components/LogEntry.jsx and
+ * src/lib/ambientWeather.js) and stores on the Firestore doc — this
+ * function does not call Ambient Weather itself. If the client couldn't
+ * reach the weather worker when the entry was logged, those fields are
+ * null and the corresponding Sheet cells are left blank.
  */
 
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
@@ -38,18 +54,22 @@ const { google } = require("googleapis");
 
 initializeApp();
 
+// The target spreadsheet: "PoolIQ" in Ryan's "Pool Chemistry" Drive folder,
+// a copy of the original warranty tracker (kept separate from the live
+// pool_chemistry_tracker sheet the old Apple Shortcut still writes to daily
+// — this function must never touch that one). Overridable via env var for
+// local testing / if the sheet ever moves.
+//
 // Ryan still needs to:
-//   1. Create/locate the target Google Sheet and copy its ID out of the
-//      URL: https://docs.google.com/spreadsheets/d/<SHEET_ID>/edit
-//   2. Share that sheet with the service account's client_email
-//      (Editor access) so appends succeed.
-//   3. Set the ID via Firebase Functions config (v1 style, still supported
-//      alongside v2 triggers) or as a deployed environment variable:
+//   1. Share this sheet with the deployed service account's client_email
+//      (Editor access) so appends succeed — Cloud Functions' default
+//      runtime service account does NOT have access to it automatically.
+//   2. Optionally override via Firebase Functions config/env if the sheet
+//      ID or tab name ever changes:
 //        firebase functions:config:set sheets.spreadsheet_id="<SHEET_ID>"
-//      or, for newer `functions.config()`-free setups, an environment
-//      variable SHEET_ID on the function itself.
-const SHEET_ID = process.env.SHEET_ID || "";
-const SHEET_TAB_NAME = process.env.SHEET_TAB_NAME || "Sheet1";
+const SHEET_ID =
+  process.env.SHEET_ID || "1G67uahgg1Gd4wiDN8HvfUEgTx3J2RK6RjJgFUCu4SoM";
+const SHEET_TAB_NAME = process.env.SHEET_TAB_NAME || "Chemistry Log";
 
 // The service account key JSON should be provided via Application Default
 // Credentials in the Cloud Functions runtime (the default runtime service
@@ -112,13 +132,19 @@ exports.syncLogToSheet = onDocumentCreated("logs/{logId}", async (event) => {
     log.waterTemp ?? "",
     log.testedBy ?? "",
     log.notes ?? "",
+    log.weatherAirTempF ?? "",
+    log.weatherHumidityPct ?? "",
+    log.weatherUvIndex ?? "",
+    log.weatherRainIn ?? "",
+    log.weatherSolarRad ?? "",
+    log.weatherWindMph ?? "",
   ];
 
   try {
     const sheets = await getSheetsClient();
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: `${SHEET_TAB_NAME}!A:L`,
+      range: `${SHEET_TAB_NAME}!A:R`,
       valueInputOption: "USER_ENTERED",
       insertDataOption: "INSERT_ROWS",
       requestBody: { values: [row] },

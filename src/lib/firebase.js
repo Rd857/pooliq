@@ -66,6 +66,11 @@ export { app, db, auth, googleProvider };
  * -------------------------------
  * logs (auto-id docs)
  *   date, time, pH, fc, tc, ta, ch, cya, salt, waterTemp, testedBy, notes, createdAt
+ *   weatherAirTempF, weatherHumidityPct, weatherUvIndex, weatherRainIn,
+ *     weatherSolarRad, weatherWindMph
+ *     — best-effort snapshot from the Ambient Weather worker at log time,
+ *       null if the worker wasn't configured/reachable. Feeds the Sheets
+ *       sync's M-R warranty-sheet columns (see functions/index.js).
  *
  * config/pool (single doc)
  *   volumeGallons (null until Ryan sets it), surfaceType ("Pebble Sheen"),
