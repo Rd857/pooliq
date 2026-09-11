@@ -6,7 +6,7 @@ weather-driven free-chlorine decay estimate between tests, a dosing
 calculator, and history charts — with every log entry eventually syncing to
 a Google Sheet for pool-warranty documentation.
 
-## Status: Phase 2 — deployed to Cloudflare Pages, GitHub Auth + Firestore live
+## Status: Phase 3 — live weather Worker wired in (pooliq-weather.dunnrd.workers.dev)
 
 The full front-end app is built and wired for Firebase + weather, but this
 session had **no live API keys or cloud accounts**. Everything that needs a
