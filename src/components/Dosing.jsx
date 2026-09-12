@@ -26,10 +26,44 @@ function readingsFromLog(log) {
   return r;
 }
 
+// How far a custom target can stray past the warranty range before we flag
+// it — expressed as a multiple of the range's own width. E.g. for FC
+// (1-3 ppm, width 2), a target of 5 (2 past the top) sits right at the
+// threshold; anything further out gets a soft warning. Deliberately loose:
+// shocking to FC 4-5 is normal and shouldn't nag.
+const TARGET_WARNING_MULTIPLE = 1;
+
+function targetWarning(range, target) {
+  if (target === undefined || target === null || Number.isNaN(target)) {
+    return null;
+  }
+  const width = range.max - range.min;
+  const overBy = target - range.max;
+  const underBy = range.min - target;
+  if (overBy > width * TARGET_WARNING_MULTIPLE) {
+    return `Well above the warranty range (${range.min}–${range.max}${
+      range.unit ? ` ${range.unit}` : ""
+    }) — double-check before dosing.`;
+  }
+  if (underBy > width * TARGET_WARNING_MULTIPLE) {
+    return `Well below the warranty range (${range.min}–${range.max}${
+      range.unit ? ` ${range.unit}` : ""
+    }) — double-check before dosing.`;
+  }
+  return null;
+}
+
 export default function Dosing() {
   const [poolConfig, setPoolConfig] = useState(undefined); // undefined = loading
   const [lastLog, setLastLog] = useState(undefined); // undefined = loading, null = none
   const [readings, setReadings] = useState({
+    fc: "",
+    cya: "",
+    ta: "",
+    ch: "",
+    pH: "",
+  });
+  const [customTargets, setCustomTargets] = useState({
     fc: "",
     cya: "",
     ta: "",
@@ -85,13 +119,34 @@ export default function Dosing() {
 
   const volumeGallons = poolConfig && poolConfig.volumeGallons;
 
-  const targets = useMemo(() => {
+  const defaultTargets = useMemo(() => {
     const t = {};
     DOSING_PARAMS.forEach((p) => {
       t[p] = midpoint(RANGES[p]);
     });
     return t;
   }, []);
+
+  const targets = useMemo(() => {
+    const t = {};
+    DOSING_PARAMS.forEach((p) => {
+      const raw = customTargets[p];
+      const custom = raw === "" ? undefined : Number(raw);
+      t[p] =
+        custom !== undefined && !Number.isNaN(custom)
+          ? custom
+          : defaultTargets[p];
+    });
+    return t;
+  }, [customTargets, defaultTargets]);
+
+  const warnings = useMemo(() => {
+    const w = {};
+    DOSING_PARAMS.forEach((p) => {
+      w[p] = targetWarning(RANGES[p], targets[p]);
+    });
+    return w;
+  }, [targets]);
 
   const currentValues = useMemo(() => {
     const c = {};
@@ -161,12 +216,41 @@ export default function Dosing() {
                   setReadings((prev) => ({ ...prev, [p]: e.target.value }))
                 }
                 style={styles.input}
-                placeholder={`target ${targets[p]}`}
+                placeholder={`current`}
               />
               <div style={styles.rangeHint}>
                 Target range: {RANGES[p].min}–{RANGES[p].max}
                 {RANGES[p].unit ? ` ${RANGES[p].unit}` : ""}
               </div>
+
+              <label style={styles.targetLabel}>
+                Goal{" "}
+                {customTargets[p] !== "" && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCustomTargets((prev) => ({ ...prev, [p]: "" }))
+                    }
+                    style={styles.clearTargetLink}
+                  >
+                    reset
+                  </button>
+                )}
+              </label>
+              <input
+                type="number"
+                inputMode="decimal"
+                step={p === "pH" ? 0.1 : 1}
+                value={customTargets[p]}
+                onChange={(e) =>
+                  setCustomTargets((prev) => ({ ...prev, [p]: e.target.value }))
+                }
+                style={styles.targetInput}
+                placeholder={`default ${defaultTargets[p]}`}
+              />
+              {warnings[p] && (
+                <div style={styles.targetWarning}>⚠️ {warnings[p]}</div>
+              )}
             </div>
           ))}
         </div>
@@ -287,6 +371,37 @@ const styles = {
   rangeHint: {
     fontSize: 11,
     color: "var(--piq-text-muted)",
+  },
+  targetLabel: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: "var(--piq-primary-dark)",
+    marginTop: 6,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  clearTargetLink: {
+    background: "none",
+    border: "none",
+    color: "var(--piq-text-muted)",
+    fontSize: 11,
+    fontWeight: 600,
+    textDecoration: "underline",
+    cursor: "pointer",
+    padding: 0,
+  },
+  targetInput: {
+    border: "1px solid var(--piq-primary-dark)",
+    borderRadius: 10,
+    padding: "8px 12px",
+    fontSize: 15,
+  },
+  targetWarning: {
+    fontSize: 11,
+    color: "#8a6100",
+    fontWeight: 600,
+    lineHeight: 1.4,
   },
   doseRow: {
     background: "var(--piq-bg)",
