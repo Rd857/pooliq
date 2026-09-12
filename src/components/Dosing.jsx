@@ -1,5 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  collection,
+  doc,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+} from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { computeAllDoses, DOSING_CAVEAT, DOSING_TABLE } from "../lib/dosing";
 import { RANGES } from "../lib/ranges";
@@ -10,8 +17,18 @@ function midpoint(range) {
   return (range.min + range.max) / 2;
 }
 
+function readingsFromLog(log) {
+  const r = {};
+  DOSING_PARAMS.forEach((p) => {
+    const v = log[p];
+    r[p] = v === undefined || v === null ? "" : String(v);
+  });
+  return r;
+}
+
 export default function Dosing() {
   const [poolConfig, setPoolConfig] = useState(undefined); // undefined = loading
+  const [lastLog, setLastLog] = useState(undefined); // undefined = loading, null = none
   const [readings, setReadings] = useState({
     fc: "",
     cya: "",
@@ -19,6 +36,7 @@ export default function Dosing() {
     ch: "",
     pH: "",
   });
+  const autoFilledRef = useRef(false);
 
   useEffect(() => {
     if (!db) {
@@ -32,6 +50,38 @@ export default function Dosing() {
     );
     return unsub;
   }, []);
+
+  useEffect(() => {
+    if (!db) {
+      setLastLog(null);
+      return undefined;
+    }
+    const q = query(
+      collection(db, "logs"),
+      orderBy("createdAt", "desc"),
+      limit(1)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => setLastLog(snap.empty ? null : snap.docs[0].data()),
+      () => setLastLog(null)
+    );
+    return unsub;
+  }, []);
+
+  // Pre-fill the readings from the most recent log, once — so it doesn't
+  // clobber values Ryan is mid-typing if a new log arrives via the
+  // real-time listener while this screen is open.
+  useEffect(() => {
+    if (autoFilledRef.current) return;
+    if (!lastLog) return;
+    autoFilledRef.current = true;
+    setReadings(readingsFromLog(lastLog));
+  }, [lastLog]);
+
+  function resetToLastLog() {
+    if (lastLog) setReadings(readingsFromLog(lastLog));
+  }
 
   const volumeGallons = poolConfig && poolConfig.volumeGallons;
 
@@ -83,6 +133,21 @@ export default function Dosing() {
         <div style={styles.helperText}>
           Pool volume: {volumeGallons.toLocaleString()} gallons
         </div>
+        {lastLog && (
+          <div style={styles.autoFillRow}>
+            <span>
+              Pre-filled from last log — {lastLog.date}
+              {lastLog.time ? ` · ${lastLog.time}` : ""}
+            </span>
+            <button
+              type="button"
+              onClick={resetToLastLog}
+              style={styles.resetLink}
+            >
+              Reset to last log
+            </button>
+          </div>
+        )}
         <div style={styles.grid}>
           {DOSING_PARAMS.map((p) => (
             <div style={styles.field} key={p}>
@@ -176,6 +241,27 @@ const styles = {
     fontSize: 13,
     color: "var(--piq-text-muted)",
     marginBottom: 14,
+  },
+  autoFillRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    fontSize: 12,
+    color: "var(--piq-text-muted)",
+    background: "var(--piq-bg)",
+    borderRadius: 10,
+    padding: "8px 12px",
+    marginBottom: 14,
+    marginTop: -6,
+  },
+  resetLink: {
+    background: "none",
+    border: "none",
+    color: "var(--piq-primary-dark)",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    padding: 0,
   },
   grid: {
     display: "grid",
