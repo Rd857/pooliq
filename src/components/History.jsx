@@ -11,13 +11,15 @@ import {
   YAxis,
 } from "recharts";
 import { db } from "../lib/firebase";
-import { RANGES } from "../lib/ranges";
+import { RANGES, rangeStatus } from "../lib/ranges";
 
 const RANGE_PRESETS = [
   { id: "30", label: "30 days", days: 30 },
   { id: "90", label: "90 days", days: 90 },
   { id: "all", label: "All time", days: null },
 ];
+
+const IN_RANGE_PARAMS = ["pH", "fc", "ta", "ch", "cya"];
 
 function withinRange(dateStr, days) {
   if (!days) return true;
@@ -28,8 +30,17 @@ function withinRange(dateStr, days) {
   return entryDate >= cutoff;
 }
 
+function withinRangeDate(date, days) {
+  if (!days) return true;
+  if (!date || Number.isNaN(date.getTime())) return true;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return date >= cutoff;
+}
+
 export default function History() {
   const [logs, setLogs] = useState(undefined); // undefined = loading
+  const [calibration, setCalibration] = useState(undefined); // undefined = loading
   const [error, setError] = useState(null);
   const [rangeId, setRangeId] = useState("30");
 
@@ -53,6 +64,20 @@ export default function History() {
     return unsub;
   }, []);
 
+  useEffect(() => {
+    if (!db) {
+      setCalibration([]);
+      return undefined;
+    }
+    const q = query(collection(db, "calibration"), orderBy("timestamp", "asc"));
+    const unsub = onSnapshot(
+      q,
+      (snap) => setCalibration(snap.docs.map((d) => d.data())),
+      () => setCalibration([])
+    );
+    return unsub;
+  }, []);
+
   const activeDays = RANGE_PRESETS.find((r) => r.id === rangeId)?.days ?? 30;
 
   const filtered = useMemo(() => {
@@ -64,6 +89,58 @@ export default function History() {
         label: l.date ? l.date.slice(5) : "", // MM-DD
       }));
   }, [logs, activeDays]);
+
+  const inRangeStats = useMemo(() => {
+    const stats = {};
+    IN_RANGE_PARAMS.forEach((p) => {
+      const withValue = filtered.filter(
+        (l) => l[p] !== undefined && l[p] !== null
+      );
+      const inRange = withValue.filter(
+        (l) => rangeStatus(p, l[p]) === "in"
+      );
+      stats[p] = {
+        pct: withValue.length ? (inRange.length / withValue.length) * 100 : null,
+        count: withValue.length,
+        inCount: inRange.length,
+      };
+    });
+    return stats;
+  }, [filtered]);
+
+  const filteredCalibration = useMemo(() => {
+    if (!calibration) return [];
+    return calibration
+      .filter((c) => {
+        const d = c.timestamp && c.timestamp.toDate ? c.timestamp.toDate() : null;
+        return withinRangeDate(d, activeDays);
+      })
+      .map((c) => {
+        const d = c.timestamp && c.timestamp.toDate ? c.timestamp.toDate() : null;
+        const error =
+          c.actualFC !== undefined && c.modelFC !== undefined
+            ? c.actualFC - c.modelFC
+            : null;
+        return {
+          ...c,
+          error,
+          label: d
+            ? `${d.getMonth() + 1}/${d.getDate()}`
+            : "",
+        };
+      });
+  }, [calibration, activeDays]);
+
+  const calibrationSummary = useMemo(() => {
+    const errors = filteredCalibration
+      .map((c) => c.error)
+      .filter((e) => e !== null && !Number.isNaN(e));
+    if (errors.length === 0) return null;
+    const meanError = errors.reduce((a, b) => a + b, 0) / errors.length;
+    const meanAbsError =
+      errors.reduce((a, b) => a + Math.abs(b), 0) / errors.length;
+    return { meanError, meanAbsError, count: errors.length };
+  }, [filteredCalibration]);
 
   if (logs === undefined) {
     return <div style={styles.loading}>Loading history…</div>;
@@ -99,6 +176,38 @@ export default function History() {
             {r.label}
           </button>
         ))}
+      </div>
+
+      <div style={styles.card}>
+        <div style={styles.sectionTitle}>Days In Range</div>
+        <div style={styles.inRangeGrid}>
+          {IN_RANGE_PARAMS.map((p) => {
+            const s = inRangeStats[p];
+            return (
+              <div key={p} style={styles.inRangeStat}>
+                <div style={styles.subMetricLabel}>{RANGES[p].label}</div>
+                <div
+                  style={{
+                    ...styles.inRangePct,
+                    color:
+                      s.pct === null
+                        ? "var(--piq-text-muted)"
+                        : s.pct >= 80
+                        ? "#2E7D32"
+                        : s.pct >= 50
+                        ? "#F9A825"
+                        : "#C62828",
+                  }}
+                >
+                  {s.pct === null ? "—" : `${Math.round(s.pct)}%`}
+                </div>
+                <div style={styles.inRangeSub}>
+                  {s.count ? `${s.inCount}/${s.count} readings` : "no data"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <ChartCard
@@ -154,6 +263,109 @@ export default function History() {
           { dataKey: "weatherAirTempF", color: "#F4511E", name: "Ambient Air" },
         ]}
       />
+
+      <div style={styles.card}>
+        <div style={styles.sectionTitle}>Decay Model Accuracy</div>
+        {filteredCalibration.length === 0 ? (
+          <div style={{ color: "var(--piq-text-muted)", fontSize: 13 }}>
+            No calibration data yet — this fills in automatically each time
+            you log a reading after a previous one, comparing the
+            Dashboard's predicted FC (based on the last log + weather) to
+            what you actually measured.
+          </div>
+        ) : (
+          <>
+            {calibrationSummary && (
+              <div style={styles.calibrationSummary}>
+                Average error:{" "}
+                <strong>
+                  {calibrationSummary.meanError >= 0 ? "+" : ""}
+                  {calibrationSummary.meanError.toFixed(2)} ppm
+                </strong>{" "}
+                ({calibrationSummary.meanError >= 0
+                  ? "model tends to predict low"
+                  : "model tends to predict high"}
+                ), mean absolute error{" "}
+                <strong>{calibrationSummary.meanAbsError.toFixed(2)} ppm</strong>{" "}
+                across {calibrationSummary.count} comparisons.
+              </div>
+            )}
+            <div style={{ width: "100%", height: 220, marginTop: 12 }}>
+              <ResponsiveContainer>
+                <LineChart
+                  data={filteredCalibration}
+                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--piq-border)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="actualFC"
+                    stroke="#2E75B6"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    connectNulls
+                    name="Actual FC"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="modelFC"
+                    stroke="#9E9E9E"
+                    strokeWidth={2}
+                    strokeDasharray="4 3"
+                    dot={{ r: 3 }}
+                    connectNulls
+                    name="Model FC"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={styles.calibrationTableWrap}>
+              <table style={styles.calibrationTable}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Date</th>
+                    <th style={styles.th}>Actual</th>
+                    <th style={styles.th}>Model</th>
+                    <th style={styles.th}>Error</th>
+                    <th style={styles.th}>UV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCalibration
+                    .slice(-10)
+                    .reverse()
+                    .map((c, i) => (
+                      <tr key={i}>
+                        <td style={styles.td}>{c.label}</td>
+                        <td style={styles.td}>{c.actualFC?.toFixed(2)}</td>
+                        <td style={styles.td}>{c.modelFC?.toFixed(2)}</td>
+                        <td style={styles.td}>
+                          {c.error !== null ? c.error.toFixed(2) : "—"}
+                        </td>
+                        <td style={styles.td}>
+                          {c.uvIndex !== undefined && c.uvIndex !== null
+                            ? c.uvIndex
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={styles.caveat}>
+              Model FC is what the Dashboard would have predicted for FC at
+              the moment of this log, based on the previous reading and
+              weather since. Scan the UV column alongside the error column
+              to eyeball whether sunnier days correlate with faster
+              real-world decay than the model assumes.
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -266,5 +478,64 @@ const styles = {
     borderRadius: 10,
     padding: "10px 14px",
     fontSize: 14,
+  },
+  inRangeGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))",
+    gap: 12,
+  },
+  inRangeStat: {
+    textAlign: "center",
+    padding: "8px 4px",
+    background: "var(--piq-bg)",
+    borderRadius: 10,
+  },
+  subMetricLabel: {
+    fontSize: 11,
+    color: "var(--piq-text-muted)",
+    fontWeight: 600,
+  },
+  inRangePct: {
+    fontSize: 22,
+    fontWeight: 800,
+    marginTop: 4,
+  },
+  inRangeSub: {
+    fontSize: 10,
+    color: "var(--piq-text-muted)",
+    marginTop: 2,
+  },
+  calibrationSummary: {
+    fontSize: 13,
+    color: "var(--piq-text)",
+    lineHeight: 1.5,
+  },
+  calibrationTableWrap: {
+    marginTop: 14,
+    overflowX: "auto",
+  },
+  calibrationTable: {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: 12,
+  },
+  th: {
+    textAlign: "left",
+    padding: "6px 8px",
+    color: "var(--piq-text-muted)",
+    fontWeight: 700,
+    borderBottom: "1px solid var(--piq-border)",
+  },
+  td: {
+    padding: "6px 8px",
+    borderBottom: "1px solid var(--piq-border)",
+  },
+  caveat: {
+    marginTop: 14,
+    fontSize: 12,
+    fontStyle: "italic",
+    color: "var(--piq-text-muted)",
+    borderTop: "1px solid var(--piq-border)",
+    paddingTop: 10,
   },
 };

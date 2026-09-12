@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { getCurrentWeather } from "../lib/ambientWeather";
+import { estimateDashboardState } from "../lib/chlorineModel";
 
 const NUMERIC_FIELDS = [
   { key: "pH", label: "pH", step: 0.1, placeholder: "7.4" },
@@ -50,9 +51,12 @@ export default function LogEntry({ onSaved }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
+  const [lastLog, setLastLog] = useState(null);
 
-  // Auto-populate water temp from the most recent log, but let the user
-  // override it freely.
+  // Track the most recent log both to auto-populate water temp and, at
+  // save time, to compare the chlorine-decay model's prediction against
+  // what actually got measured (see the `calibration` write in
+  // handleSubmit below).
   useEffect(() => {
     if (!db) return undefined;
     const q = query(
@@ -61,15 +65,18 @@ export default function LogEntry({ onSaved }) {
       limit(1)
     );
     const unsub = onSnapshot(q, (snap) => {
-      if (!snap.empty) {
-        const last = snap.docs[0].data();
-        if (last.waterTemp !== undefined && last.waterTemp !== null) {
-          setValues((prev) =>
-            prev.waterTemp === "" || prev.waterTemp === undefined
-              ? { ...prev, waterTemp: String(last.waterTemp) }
-              : prev
-          );
-        }
+      if (snap.empty) {
+        setLastLog(null);
+        return;
+      }
+      const last = snap.docs[0].data();
+      setLastLog(last);
+      if (last.waterTemp !== undefined && last.waterTemp !== null) {
+        setValues((prev) =>
+          prev.waterTemp === "" || prev.waterTemp === undefined
+            ? { ...prev, waterTemp: String(last.waterTemp) }
+            : prev
+        );
       }
     });
     return unsub;
@@ -128,6 +135,39 @@ export default function LogEntry({ onSaved }) {
           : null,
         createdAt: serverTimestamp(),
       });
+
+      // Best-effort model-calibration record: compare what the decay model
+      // would have predicted for FC right now (based on the previous log +
+      // current weather) against what was actually just measured. Lets
+      // History show model-vs-actual accuracy over time without ever
+      // blocking the log save itself if this fails or doesn't apply.
+      try {
+        const actualFC = toNumberOrNull(values.fc);
+        if (lastLog && actualFC !== null && weather.available) {
+          const prediction = estimateDashboardState({
+            lastLog,
+            weather,
+            now: new Date(),
+          });
+          if (prediction) {
+            await addDoc(collection(db, "calibration"), {
+              timestamp: serverTimestamp(),
+              actualFC,
+              modelFC: prediction.estimatedFC,
+              hoursElapsed: prediction.hoursElapsed,
+              kTot: prediction.decayRate,
+              uvIndex: weather.uv ?? null,
+              solarRad: weather.solarradiation ?? null,
+              waterTemp: lastLog.waterTemp ?? null,
+            });
+          }
+        }
+      } catch (calibrationErr) {
+        console.warn(
+          "Failed to write calibration record (non-fatal):",
+          calibrationErr
+        );
+      }
 
       setSaved(true);
       setTimeout(() => {
