@@ -60,22 +60,21 @@ initializeApp();
 // — this function must never touch that one). Overridable via env var for
 // local testing / if the sheet ever moves.
 //
-// Ryan still needs to:
-//   1. Share this sheet with the deployed service account's client_email
-//      (Editor access) so appends succeed — Cloud Functions' default
-//      runtime service account does NOT have access to it automatically.
-//   2. Optionally override via Firebase Functions config/env if the sheet
-//      ID or tab name ever changes:
-//        firebase functions:config:set sheets.spreadsheet_id="<SHEET_ID>"
+// This function runs as the dedicated pooliq-sheets-sync service account
+// (see the `serviceAccount` option below), which has been shared as Editor
+// on the target Sheet directly — no IAM roles, no downloaded key file.
+// Optionally override via env var if the sheet ID or tab name ever changes:
+//   firebase functions:config:set sheets.spreadsheet_id="<SHEET_ID>"
 const SHEET_ID =
   process.env.SHEET_ID || "1G67uahgg1Gd4wiDN8HvfUEgTx3J2RK6RjJgFUCu4SoM";
 const SHEET_TAB_NAME = process.env.SHEET_TAB_NAME || "Chemistry Log";
 
-// The service account key JSON should be provided via Application Default
-// Credentials in the Cloud Functions runtime (the default runtime service
-// account already has project-level credentials) OR, if a dedicated service
-// account key is used, loaded via GOOGLE_APPLICATION_CREDENTIALS. We do NOT
-// commit a service-account JSON to this repo — see .gitignore.
+const SYNC_SERVICE_ACCOUNT =
+  "pooliq-sheets-sync@pooliq-f401b.iam.gserviceaccount.com";
+
+// Cloud Functions supplies Application Default Credentials for whichever
+// service account the function runs as (set via `serviceAccount` below) —
+// no key file to manage or leak.
 async function getSheetsClient() {
   const auth = new google.auth.GoogleAuth({
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
@@ -103,7 +102,9 @@ function formatTime(timeStr) {
   return `${h}:${mStr} ${suffix}`;
 }
 
-exports.syncLogToSheet = onDocumentCreated("logs/{logId}", async (event) => {
+exports.syncLogToSheet = onDocumentCreated(
+  { document: "logs/{logId}", serviceAccount: SYNC_SERVICE_ACCOUNT },
+  async (event) => {
   if (!SHEET_ID) {
     console.warn(
       "SHEET_ID is not configured — skipping Google Sheets sync. " +
@@ -156,4 +157,5 @@ exports.syncLogToSheet = onDocumentCreated("logs/{logId}", async (event) => {
     // monitoring, rather than silently swallowing sync failures.
     throw err;
   }
-});
+  }
+);

@@ -194,7 +194,11 @@ export function estimateDashboardState({ lastLog, weather, now = new Date() }) {
     return null;
   }
 
-  const loggedAt = lastLog.createdAt ? new Date(lastLog.createdAt) : null;
+  const loggedAt = lastLog.createdAt
+    ? typeof lastLog.createdAt.toDate === "function"
+      ? lastLog.createdAt.toDate()
+      : new Date(lastLog.createdAt)
+    : null;
   const hoursElapsed = loggedAt
     ? Math.max(0, (now.getTime() - loggedAt.getTime()) / (1000 * 60 * 60))
     : 0;
