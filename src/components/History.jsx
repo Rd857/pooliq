@@ -145,6 +145,15 @@ export default function History() {
         min={RANGES.cya.min}
         max={RANGES.cya.max}
       />
+
+      <DualLineChartCard
+        title="Pool Water Temp vs. Ambient Air Temp (°F)"
+        data={filtered}
+        series={[
+          { dataKey: "waterTemp", color: "#2E75B6", name: "Pool Water" },
+          { dataKey: "weatherAirTempF", color: "#F4511E", name: "Ambient Air" },
+        ]}
+      />
     </div>
   );
 }
@@ -176,6 +185,37 @@ function ChartCard({ title, data, dataKey, color, min, max }) {
               connectNulls
               name={title.split(" (")[0]}
             />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function DualLineChartCard({ title, data, series }) {
+  return (
+    <div style={styles.card}>
+      <div style={styles.sectionTitle}>{title}</div>
+      <div style={{ width: "100%", height: 220 }}>
+        <ResponsiveContainer>
+          <LineChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--piq-border)" />
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            {series.map((s) => (
+              <Line
+                key={s.dataKey}
+                type="monotone"
+                dataKey={s.dataKey}
+                stroke={s.color}
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                connectNulls
+                name={s.name}
+              />
+            ))}
           </LineChart>
         </ResponsiveContainer>
       </div>
