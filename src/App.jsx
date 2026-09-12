@@ -3,6 +3,7 @@ import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { auth, googleProvider, isFirebaseConfigured } from "./lib/firebase";
 import Dashboard from "./components/Dashboard.jsx";
 import LogEntry from "./components/LogEntry.jsx";
+import CleaningLog from "./components/CleaningLog.jsx";
 import History from "./components/History.jsx";
 import Dosing from "./components/Dosing.jsx";
 
@@ -61,6 +62,7 @@ function SignInScreen({ onSignIn, error }) {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [logMode, setLogMode] = useState("chemistry");
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
@@ -119,7 +121,35 @@ export default function App() {
       <main style={styles.main}>
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "log" && (
-          <LogEntry onSaved={() => setActiveTab("dashboard")} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={styles.logModeRow}>
+              <button
+                onClick={() => setLogMode("chemistry")}
+                style={{
+                  ...styles.logModeButton,
+                  ...(logMode === "chemistry"
+                    ? styles.logModeButtonActive
+                    : {}),
+                }}
+              >
+                Chemistry Reading
+              </button>
+              <button
+                onClick={() => setLogMode("cleaning")}
+                style={{
+                  ...styles.logModeButton,
+                  ...(logMode === "cleaning" ? styles.logModeButtonActive : {}),
+                }}
+              >
+                Cleaning
+              </button>
+            </div>
+            {logMode === "chemistry" ? (
+              <LogEntry onSaved={() => setActiveTab("dashboard")} />
+            ) : (
+              <CleaningLog onSaved={() => setActiveTab("dashboard")} />
+            )}
+          </div>
         )}
         {activeTab === "history" && <History />}
         {activeTab === "dosing" && <Dosing />}
@@ -224,6 +254,29 @@ const styles = {
     display: "flex",
     paddingBottom: "env(safe-area-inset-bottom, 0px)",
     boxShadow: "0 -2px 8px rgba(0,0,0,0.05)",
+  },
+  logModeRow: {
+    display: "flex",
+    gap: 8,
+    background: "var(--piq-bg)",
+    borderRadius: 12,
+    padding: 4,
+  },
+  logModeButton: {
+    flex: 1,
+    border: "none",
+    background: "none",
+    borderRadius: 9,
+    padding: "10px 0",
+    fontSize: 14,
+    fontWeight: 600,
+    color: "var(--piq-text-muted)",
+    cursor: "pointer",
+  },
+  logModeButtonActive: {
+    background: "var(--piq-card-bg)",
+    color: "var(--piq-primary-dark)",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
   },
   navButton: {
     flex: 1,

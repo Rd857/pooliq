@@ -68,6 +68,8 @@ initializeApp();
 const SHEET_ID =
   process.env.SHEET_ID || "1G67uahgg1Gd4wiDN8HvfUEgTx3J2RK6RjJgFUCu4SoM";
 const SHEET_TAB_NAME = process.env.SHEET_TAB_NAME || "Chemistry Log";
+const CLEANING_SHEET_TAB_NAME =
+  process.env.CLEANING_SHEET_TAB_NAME || "Cleaning Log";
 
 const SYNC_SERVICE_ACCOUNT =
   "pooliq-sheets-sync@pooliq-f401b.iam.gserviceaccount.com";
@@ -157,5 +159,53 @@ exports.syncLogToSheet = onDocumentCreated(
     // monitoring, rather than silently swallowing sync failures.
     throw err;
   }
+  }
+);
+
+// Mirrors syncLogToSheet above, but for the `cleanings` collection
+// (src/components/CleaningLog.jsx) — appends to the same PoolIQ Sheet's
+// "Cleaning Log" tab: Date | Time | Type | Notes | Performed By.
+exports.syncCleaningToSheet = onDocumentCreated(
+  { document: "cleanings/{cleaningId}", serviceAccount: SYNC_SERVICE_ACCOUNT },
+  async (event) => {
+    if (!SHEET_ID) {
+      console.warn(
+        "SHEET_ID is not configured — skipping Google Sheets sync."
+      );
+      return;
+    }
+
+    const cleaning = event.data && event.data.data();
+    if (!cleaning) {
+      console.warn(
+        "No cleaning data found on the triggering document; skipping."
+      );
+      return;
+    }
+
+    const row = [
+      formatDate(cleaning.date),
+      formatTime(cleaning.time),
+      cleaning.type ?? "",
+      cleaning.notes ?? "",
+      cleaning.performedBy ?? "",
+    ];
+
+    try {
+      const sheets = await getSheetsClient();
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID,
+        range: `${CLEANING_SHEET_TAB_NAME}!A:E`,
+        valueInputOption: "USER_ENTERED",
+        insertDataOption: "INSERT_ROWS",
+        requestBody: { values: [row] },
+      });
+      console.log(
+        `Appended cleaning ${event.params.cleaningId} to Google Sheet.`
+      );
+    } catch (err) {
+      console.error("Failed to append cleaning to Google Sheet:", err);
+      throw err;
+    }
   }
 );
