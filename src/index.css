@@ -1,19 +1,24 @@
 :root {
-  --piq-primary: #2e75b6;
-  --piq-primary-dark: #1f4e79;
-  --piq-bg: #f4f7fa;
-  --piq-card-bg: #ffffff;
-  --piq-text: #1a2733;
-  --piq-text-muted: #5b6b78;
-  --piq-border: #e0e6eb;
-  --piq-green: #2e7d32;
-  --piq-green-bg: #e8f5e9;
-  --piq-yellow: #f9a825;
-  --piq-yellow-bg: #fff8e1;
-  --piq-red: #c62828;
-  --piq-red-bg: #ffebee;
-  --piq-gray: #9e9e9e;
+  --piq-primary: #35e0c7;
+  --piq-primary-dark: #12615a;
+  --piq-bg: #0b1416;
+  --piq-card-bg: #101c1f;
+  --piq-text: #cfefea;
+  --piq-text-muted: #5c8481;
+  --piq-border: rgba(53, 224, 199, 0.16);
+  --piq-green: #35e0c7;
+  --piq-green-bg: rgba(53, 224, 199, 0.1);
+  --piq-yellow: #f2b84b;
+  --piq-yellow-bg: rgba(242, 184, 75, 0.1);
+  --piq-red: #ff6b6b;
+  --piq-red-bg: rgba(255, 107, 107, 0.1);
+  --piq-gray: #5c8481;
   --piq-nav-height: 64px;
+  --piq-radius: 4px;
+  --piq-shadow: none;
+  --piq-on-accent: #06201c;
+  --piq-font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo,
+    Consolas, monospace;
 }
 
 * {
@@ -29,16 +34,14 @@ body {
   margin: 0;
   background: var(--piq-bg);
   color: var(--piq-text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
-    "Helvetica Neue", sans-serif;
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
-    monospace;
+  font-family: var(--piq-font-mono);
 }
 
 button,
@@ -46,6 +49,7 @@ input,
 select,
 textarea {
   font-family: inherit;
+  color: inherit;
 }
 
 input[type="number"],

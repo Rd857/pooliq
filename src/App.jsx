@@ -19,7 +19,7 @@ function NotConfiguredScreen() {
     <div style={styles.centerScreen}>
       <div style={styles.notConfiguredCard}>
         <div style={{ fontSize: 40, marginBottom: 8 }}>🏊</div>
-        <h1 style={{ margin: "0 0 8px", color: "var(--piq-primary-dark)" }}>
+        <h1 style={{ margin: "0 0 8px", color: "var(--piq-primary)" }}>
           PoolIQ
         </h1>
         <p style={{ color: "var(--piq-text-muted)", marginBottom: 16 }}>
@@ -41,7 +41,7 @@ function SignInScreen({ onSignIn, error }) {
     <div style={styles.centerScreen}>
       <div style={styles.notConfiguredCard}>
         <div style={{ fontSize: 40, marginBottom: 8 }}>🏊</div>
-        <h1 style={{ margin: "0 0 8px", color: "var(--piq-primary-dark)" }}>
+        <h1 style={{ margin: "0 0 8px", color: "var(--piq-primary)" }}>
           PoolIQ
         </h1>
         <p style={{ color: "var(--piq-text-muted)", marginBottom: 20 }}>
@@ -192,15 +192,15 @@ const styles = {
     textAlign: "center",
     background: "var(--piq-card-bg)",
     border: "1px solid var(--piq-border)",
-    borderRadius: 16,
+    borderRadius: "var(--piq-radius)",
     padding: 32,
-    boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+    boxShadow: "var(--piq-shadow)",
   },
   signInButton: {
     background: "var(--piq-primary)",
-    color: "white",
+    color: "var(--piq-on-accent)",
     border: "none",
-    borderRadius: 10,
+    borderRadius: "var(--piq-radius)",
     padding: "14px 24px",
     fontSize: 16,
     fontWeight: 600,
@@ -216,8 +216,9 @@ const styles = {
     position: "sticky",
     top: 0,
     zIndex: 10,
-    background: "var(--piq-primary-dark)",
-    color: "white",
+    background: "var(--piq-bg)",
+    color: "var(--piq-text)",
+    borderBottom: "1px solid var(--piq-border)",
     padding: "14px 16px",
     display: "flex",
     alignItems: "center",
@@ -225,15 +226,20 @@ const styles = {
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 700,
+    fontWeight: 600,
+    fontFamily: "var(--piq-font-mono)",
+    letterSpacing: 0.5,
   },
   signOutButton: {
-    background: "rgba(255,255,255,0.15)",
-    color: "white",
-    border: "none",
-    borderRadius: 8,
+    background: "transparent",
+    color: "var(--piq-text-muted)",
+    border: "1px solid var(--piq-border)",
+    borderRadius: "var(--piq-radius)",
     padding: "6px 12px",
-    fontSize: 13,
+    fontSize: 12,
+    fontFamily: "var(--piq-font-mono)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
     cursor: "pointer",
   },
   main: {
@@ -253,30 +259,34 @@ const styles = {
     borderTop: "1px solid var(--piq-border)",
     display: "flex",
     paddingBottom: "env(safe-area-inset-bottom, 0px)",
-    boxShadow: "0 -2px 8px rgba(0,0,0,0.05)",
+    boxShadow: "var(--piq-shadow)",
   },
   logModeRow: {
     display: "flex",
     gap: 8,
-    background: "var(--piq-bg)",
-    borderRadius: 12,
+    background: "var(--piq-card-bg)",
+    border: "1px solid var(--piq-border)",
+    borderRadius: "var(--piq-radius)",
     padding: 4,
   },
   logModeButton: {
     flex: 1,
-    border: "none",
+    border: "1px solid transparent",
     background: "none",
-    borderRadius: 9,
+    borderRadius: "var(--piq-radius)",
     padding: "10px 0",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 600,
+    fontFamily: "var(--piq-font-mono)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
     color: "var(--piq-text-muted)",
     cursor: "pointer",
   },
   logModeButtonActive: {
-    background: "var(--piq-card-bg)",
-    color: "var(--piq-primary-dark)",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+    background: "var(--piq-bg)",
+    borderColor: "var(--piq-primary)",
+    color: "var(--piq-primary)",
   },
   navButton: {
     flex: 1,

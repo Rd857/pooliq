@@ -36,8 +36,8 @@ export function rangeStatus(paramKey, value) {
 
 /** Maps a range status to a UI color, matching the Dashboard/History palette. */
 export const STATUS_COLOR = {
-  in: "#2E7D32", // green
-  low: "#F9A825", // yellow/amber
-  high: "#C62828", // red
-  unknown: "#9E9E9E", // gray
+  in: "#35E0C7", // phosphor teal
+  low: "#F2B84B", // amber
+  high: "#FF6B6B", // red
+  unknown: "#5C8481", // muted
 };

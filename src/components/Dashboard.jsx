@@ -12,22 +12,22 @@ import { getCurrentWeather } from "../lib/ambientWeather";
 import { estimateDashboardState, FC_FLOOR_PPM } from "../lib/chlorineModel";
 import { RANGES, rangeStatus, STATUS_COLOR } from "../lib/ranges";
 
-const WEATHER_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
-
 function StatusPill({ status }) {
-  const label = { in: "In range", low: "Low", high: "High", unknown: "—" }[
-    status
-  ];
+  const label = { in: "OK", low: "LOW", high: "HIGH", unknown: "—" }[status];
+  const color = STATUS_COLOR[status];
   return (
     <span
       style={{
         display: "inline-block",
-        padding: "2px 10px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 700,
-        color: "white",
-        background: STATUS_COLOR[status],
+        padding: "2px 8px",
+        borderRadius: 2,
+        fontSize: 11,
+        fontWeight: 600,
+        fontFamily: "var(--piq-font-mono)",
+        letterSpacing: 0.5,
+        color,
+        border: `1px solid ${color}`,
+        background: "transparent",
       }}
     >
       {label}
@@ -81,6 +81,11 @@ export default function Dashboard() {
     return unsub;
   }, []);
 
+  // Fetch weather once when the dashboard is opened — not on a recurring
+  // timer. Live weather here is only used to project the FC decay estimate
+  // forward from the last log to "now"; a single fetch per visit is enough
+  // for that, and it keeps this screen from silently hammering the weather
+  // Worker in the background for as long as a tab happens to stay open.
   useEffect(() => {
     let cancelled = false;
 
@@ -94,10 +99,8 @@ export default function Dashboard() {
     }
 
     loadWeather();
-    const interval = setInterval(loadWeather, WEATHER_REFRESH_MS);
     return () => {
       cancelled = true;
-      clearInterval(interval);
     };
   }, []);
 
@@ -134,7 +137,7 @@ export default function Dashboard() {
       <div
         style={{
           ...styles.card,
-          borderLeft: `6px solid ${STATUS_COLOR[fcRangeStatus]}`,
+          borderLeft: `3px solid ${STATUS_COLOR[fcRangeStatus]}`,
         }}
       >
         <div style={styles.heroLabel}>ESTIMATED FREE CHLORINE</div>
@@ -142,7 +145,7 @@ export default function Dashboard() {
           <>
             <div style={styles.heroValue}>
               {dashboardState.estimatedFC.toFixed(2)}{" "}
-              <span style={{ fontSize: 16, fontWeight: 500 }}>ppm</span>{" "}
+              <span style={{ fontSize: 15, fontWeight: 500 }}>ppm</span>{" "}
               <StatusPill status={fcRangeStatus} />
             </div>
             <div style={styles.subMetricsRow}>
@@ -172,8 +175,8 @@ export default function Dashboard() {
             </div>
             {dashboardState.rainWarning && (
               <div style={styles.rainBanner}>
-                🌧️ Meaningful rain today — dilution may affect chlorine/pH
-                beyond what this model accounts for.
+                Meaningful rain today — dilution may affect chlorine/pH beyond
+                what this model accounts for.
               </div>
             )}
           </>
@@ -220,7 +223,7 @@ export default function Dashboard() {
             </div>
             {weather.stale && (
               <div style={styles.staleBanner}>
-                ⚠️ Station data may be stale (last update over 30 min ago).
+                Station data may be stale (last update over 30 min ago).
               </div>
             )}
           </>
@@ -293,21 +296,24 @@ const styles = {
   card: {
     background: "var(--piq-card-bg)",
     border: "1px solid var(--piq-border)",
-    borderRadius: 16,
+    borderRadius: "var(--piq-radius)",
     padding: 18,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+    boxShadow: "var(--piq-shadow)",
   },
   heroLabel: {
-    fontSize: 12,
-    fontWeight: 700,
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
     color: "var(--piq-text-muted)",
   },
   heroValue: {
-    fontSize: 34,
-    fontWeight: 800,
-    color: "var(--piq-primary-dark)",
-    marginTop: 4,
+    fontSize: 32,
+    fontWeight: 600,
+    fontFamily: "var(--piq-font-mono)",
+    fontVariantNumeric: "tabular-nums",
+    color: "var(--piq-primary)",
+    marginTop: 6,
     display: "flex",
     alignItems: "center",
     gap: 10,
@@ -323,8 +329,10 @@ const styles = {
     fontWeight: 600,
   },
   subMetricValue: {
-    fontSize: 16,
-    fontWeight: 700,
+    fontSize: 15,
+    fontWeight: 600,
+    fontFamily: "var(--piq-font-mono)",
+    fontVariantNumeric: "tabular-nums",
     marginTop: 2,
   },
   estimatedNote: {
@@ -335,9 +343,9 @@ const styles = {
   },
   rainBanner: {
     marginTop: 12,
-    background: "#e3f2fd",
-    color: "#1565c0",
-    borderRadius: 10,
+    background: "var(--piq-green-bg)",
+    color: "var(--piq-primary)",
+    borderRadius: "var(--piq-radius)",
     padding: "8px 12px",
     fontSize: 13,
     fontWeight: 600,
@@ -359,15 +367,15 @@ const styles = {
   staleBanner: {
     marginTop: 12,
     background: "var(--piq-yellow-bg)",
-    color: "#8a6100",
-    borderRadius: 10,
+    color: "var(--piq-yellow)",
+    borderRadius: "var(--piq-radius)",
     padding: "8px 12px",
     fontSize: 13,
   },
   unavailableBanner: {
     background: "var(--piq-yellow-bg)",
-    color: "#8a6100",
-    borderRadius: 10,
+    color: "var(--piq-yellow)",
+    borderRadius: "var(--piq-radius)",
     padding: "10px 12px",
     fontSize: 13,
   },
@@ -387,7 +395,7 @@ const styles = {
     fontSize: 13,
     color: "var(--piq-text)",
     background: "var(--piq-bg)",
-    borderRadius: 10,
+    borderRadius: "var(--piq-radius)",
     padding: "8px 12px",
   },
   testedBy: {

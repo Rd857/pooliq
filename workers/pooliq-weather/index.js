@@ -17,16 +17,33 @@
  * Response shape: passes through the raw Ambient Weather /v1/devices JSON
  * array unchanged (each element has a `lastData` object) — see
  * src/lib/ambientWeather.js for how the front-end consumes it.
+ *
+ * Caching: Ambient Weather's API rate-limits aggressively (a burst of
+ * requests — e.g. the dashboard open on the phone + desktop + a dev server
+ * at once — returns 429s). The station itself only reports in ~once a
+ * minute anyway, so we cache the upstream response at Cloudflare's edge
+ * (Workers Cache API) for CACHE_TTL_SECONDS and serve every request within
+ * that window from cache without touching the Ambient Weather API at all.
  */
 
+const CACHE_TTL_SECONDS = 60;
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     // CORS preflight support.
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
         headers: corsHeaders(),
       });
+    }
+
+    const cache = caches.default;
+    const cacheKey = new Request(new URL(request.url).toString(), request);
+
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      return cached;
     }
 
     if (!env.AMBIENT_API_KEY || !env.AMBIENT_APP_KEY) {
@@ -53,6 +70,8 @@ export default {
       });
 
       if (!upstream.ok) {
+        // Don't cache failures (including 429s) — let the next request
+        // retry against Ambient Weather rather than pinning an error.
         return jsonResponse(
           { error: `Ambient Weather API responded with ${upstream.status}` },
           upstream.status
@@ -60,7 +79,9 @@ export default {
       }
 
       const data = await upstream.json();
-      return jsonResponse(data, 200);
+      const response = jsonResponse(data, 200);
+      ctx.waitUntil(cache.put(cacheKey, response.clone()));
+      return response;
     } catch (err) {
       return jsonResponse(
         { error: `Failed to reach Ambient Weather API: ${err.message}` },
@@ -84,6 +105,9 @@ function jsonResponse(body, status) {
     headers: {
       "Content-Type": "application/json",
       ...corsHeaders(),
+      ...(status === 200
+        ? { "Cache-Control": `public, max-age=${CACHE_TTL_SECONDS}` }
+        : { "Cache-Control": "no-store" }),
     },
   });
 }

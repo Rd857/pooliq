@@ -169,8 +169,9 @@ export default function Dosing() {
   if (!volumeGallons) {
     return (
       <div style={styles.warningCard}>
-        <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
-        <h2 style={{ marginTop: 0 }}>Pool volume not set</h2>
+        <h2 style={{ marginTop: 0, color: "var(--piq-yellow)" }}>
+          Pool volume not set
+        </h2>
         <p style={{ color: "var(--piq-text-muted)" }}>
           Set your pool volume in <strong>config/pool.volumeGallons</strong>{" "}
           (Firestore, via Config — a dedicated Config screen is a future
@@ -301,17 +302,17 @@ const styles = {
   loading: { padding: 24, textAlign: "center", color: "var(--piq-text-muted)" },
   warningCard: {
     background: "var(--piq-yellow-bg)",
-    border: "1px solid #f4d97a",
-    borderRadius: 16,
+    border: "1px solid var(--piq-yellow)",
+    borderRadius: "var(--piq-radius)",
     padding: 24,
     textAlign: "center",
   },
   card: {
     background: "var(--piq-card-bg)",
     border: "1px solid var(--piq-border)",
-    borderRadius: 16,
+    borderRadius: "var(--piq-radius)",
     padding: 18,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+    boxShadow: "var(--piq-shadow)",
   },
   sectionTitle: {
     fontSize: 13,
@@ -333,7 +334,7 @@ const styles = {
     fontSize: 12,
     color: "var(--piq-text-muted)",
     background: "var(--piq-bg)",
-    borderRadius: 10,
+    borderRadius: "var(--piq-radius)",
     padding: "8px 12px",
     marginBottom: 14,
     marginTop: -6,
@@ -341,7 +342,7 @@ const styles = {
   resetLink: {
     background: "none",
     border: "none",
-    color: "var(--piq-primary-dark)",
+    color: "var(--piq-primary)",
     fontSize: 12,
     fontWeight: 700,
     cursor: "pointer",
@@ -364,9 +365,12 @@ const styles = {
   },
   input: {
     border: "1px solid var(--piq-border)",
-    borderRadius: 10,
+    borderRadius: "var(--piq-radius)",
+    background: "var(--piq-card-bg)",
+    color: "var(--piq-text)",
     padding: "10px 12px",
     fontSize: 16,
+    fontFamily: "var(--piq-font-mono)",
   },
   rangeHint: {
     fontSize: 11,
@@ -375,7 +379,7 @@ const styles = {
   targetLabel: {
     fontSize: 11,
     fontWeight: 600,
-    color: "var(--piq-primary-dark)",
+    color: "var(--piq-primary)",
     marginTop: 6,
     display: "flex",
     alignItems: "center",
@@ -392,20 +396,24 @@ const styles = {
     padding: 0,
   },
   targetInput: {
-    border: "1px solid var(--piq-primary-dark)",
-    borderRadius: 10,
+    border: "1px solid var(--piq-primary)",
+    borderRadius: "var(--piq-radius)",
+    background: "var(--piq-card-bg)",
+    color: "var(--piq-text)",
     padding: "8px 12px",
     fontSize: 15,
+    fontFamily: "var(--piq-font-mono)",
   },
   targetWarning: {
     fontSize: 11,
-    color: "#8a6100",
+    color: "var(--piq-yellow)",
     fontWeight: 600,
     lineHeight: 1.4,
   },
   doseRow: {
     background: "var(--piq-bg)",
-    borderRadius: 12,
+    border: "1px solid var(--piq-border)",
+    borderRadius: "var(--piq-radius)",
     padding: "12px 14px",
   },
   doseHeader: {
@@ -414,9 +422,11 @@ const styles = {
     alignItems: "baseline",
   },
   doseAmount: {
-    fontSize: 18,
-    fontWeight: 800,
-    color: "var(--piq-primary-dark)",
+    fontSize: 17,
+    fontWeight: 600,
+    fontFamily: "var(--piq-font-mono)",
+    fontVariantNumeric: "tabular-nums",
+    color: "var(--piq-primary)",
   },
   doseSub: {
     fontSize: 13,

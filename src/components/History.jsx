@@ -193,10 +193,10 @@ export default function History() {
                       s.pct === null
                         ? "var(--piq-text-muted)"
                         : s.pct >= 80
-                        ? "#2E7D32"
+                        ? "var(--piq-green)"
                         : s.pct >= 50
-                        ? "#F9A825"
-                        : "#C62828",
+                        ? "var(--piq-yellow)"
+                        : "var(--piq-red)",
                   }}
                 >
                   {s.pct === null ? "—" : `${Math.round(s.pct)}%`}
@@ -214,7 +214,7 @@ export default function History() {
         title={`Free Chlorine (target ${RANGES.fc.min}–${RANGES.fc.max} ppm)`}
         data={filtered}
         dataKey="fc"
-        color="#2E75B6"
+        color="#35E0C7"
         min={RANGES.fc.min}
         max={RANGES.fc.max}
       />
@@ -223,7 +223,7 @@ export default function History() {
         title={`pH (target ${RANGES.pH.min}–${RANGES.pH.max})`}
         data={filtered}
         dataKey="pH"
-        color="#8E24AA"
+        color="#35E0C7"
         min={RANGES.pH.min}
         max={RANGES.pH.max}
       />
@@ -232,7 +232,7 @@ export default function History() {
         title="Total Alkalinity (ppm)"
         data={filtered}
         dataKey="ta"
-        color="#00897B"
+        color="#35E0C7"
         min={RANGES.ta.min}
         max={RANGES.ta.max}
       />
@@ -241,7 +241,7 @@ export default function History() {
         title="Calcium Hardness (ppm)"
         data={filtered}
         dataKey="ch"
-        color="#F4511E"
+        color="#35E0C7"
         min={RANGES.ch.min}
         max={RANGES.ch.max}
       />
@@ -250,7 +250,7 @@ export default function History() {
         title="CYA / Stabilizer (ppm)"
         data={filtered}
         dataKey="cya"
-        color="#6D4C41"
+        color="#35E0C7"
         min={RANGES.cya.min}
         max={RANGES.cya.max}
       />
@@ -259,8 +259,8 @@ export default function History() {
         title="Pool Water Temp vs. Ambient Air Temp (°F)"
         data={filtered}
         series={[
-          { dataKey: "waterTemp", color: "#2E75B6", name: "Pool Water" },
-          { dataKey: "weatherAirTempF", color: "#F4511E", name: "Ambient Air" },
+          { dataKey: "waterTemp", color: "#35E0C7", name: "Pool Water" },
+          { dataKey: "weatherAirTempF", color: "#F2B84B", name: "Ambient Air" },
         ]}
       />
 
@@ -297,14 +297,26 @@ export default function History() {
                   margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--piq-border)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: "#5C8481" }}
+                    stroke="#5C8481"
+                  />
+                  <YAxis tick={{ fontSize: 11, fill: "#5C8481" }} stroke="#5C8481" />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#101C1F",
+                      border: "1px solid var(--piq-border)",
+                      borderRadius: 4,
+                    }}
+                    labelStyle={{ color: "#5C8481" }}
+                    itemStyle={{ color: "#CFEFEA" }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12, color: "#5C8481" }} />
                   <Line
                     type="monotone"
                     dataKey="actualFC"
-                    stroke="#2E75B6"
+                    stroke="#35E0C7"
                     strokeWidth={2}
                     dot={{ r: 3 }}
                     connectNulls
@@ -313,7 +325,7 @@ export default function History() {
                   <Line
                     type="monotone"
                     dataKey="modelFC"
-                    stroke="#9E9E9E"
+                    stroke="#5C8481"
                     strokeWidth={2}
                     strokeDasharray="4 3"
                     dot={{ r: 3 }}
@@ -378,16 +390,29 @@ function ChartCard({ title, data, dataKey, color, min, max }) {
         <ResponsiveContainer>
           <LineChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--piq-border)" />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11, fill: "#5C8481" }}
+              stroke="#5C8481"
+            />
             <YAxis
               domain={[
                 (dataMin) => Math.min(dataMin, min) - (max - min) * 0.15,
                 (dataMax) => Math.max(dataMax, max) + (max - min) * 0.15,
               ]}
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fill: "#5C8481" }}
+              stroke="#5C8481"
             />
-            <Tooltip />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Tooltip
+              contentStyle={{
+                background: "#101C1F",
+                border: "1px solid var(--piq-border)",
+                borderRadius: 4,
+              }}
+              labelStyle={{ color: "#5C8481" }}
+              itemStyle={{ color: "#CFEFEA" }}
+            />
+            <Legend wrapperStyle={{ fontSize: 12, color: "#5C8481" }} />
             <Line
               type="monotone"
               dataKey={dataKey}
@@ -412,10 +437,22 @@ function DualLineChartCard({ title, data, series }) {
         <ResponsiveContainer>
           <LineChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--piq-border)" />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11, fill: "#5C8481" }}
+              stroke="#5C8481"
+            />
+            <YAxis tick={{ fontSize: 11, fill: "#5C8481" }} stroke="#5C8481" />
+            <Tooltip
+              contentStyle={{
+                background: "#101C1F",
+                border: "1px solid var(--piq-border)",
+                borderRadius: 4,
+              }}
+              labelStyle={{ color: "#5C8481" }}
+              itemStyle={{ color: "#CFEFEA" }}
+            />
+            <Legend wrapperStyle={{ fontSize: 12, color: "#5C8481" }} />
             {series.map((s) => (
               <Line
                 key={s.dataKey}
@@ -440,9 +477,9 @@ const styles = {
   card: {
     background: "var(--piq-card-bg)",
     border: "1px solid var(--piq-border)",
-    borderRadius: 16,
+    borderRadius: "var(--piq-radius)",
     padding: 18,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+    boxShadow: "var(--piq-shadow)",
   },
   sectionTitle: {
     fontSize: 13,
@@ -460,22 +497,25 @@ const styles = {
     flex: 1,
     border: "1px solid var(--piq-border)",
     background: "var(--piq-card-bg)",
-    borderRadius: 10,
+    borderRadius: "var(--piq-radius)",
     padding: "8px 0",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 600,
+    fontFamily: "var(--piq-font-mono)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
     color: "var(--piq-text-muted)",
     cursor: "pointer",
   },
   filterButtonActive: {
     background: "var(--piq-primary)",
     borderColor: "var(--piq-primary)",
-    color: "white",
+    color: "var(--piq-on-accent)",
   },
   errorBanner: {
     background: "var(--piq-red-bg)",
     color: "var(--piq-red)",
-    borderRadius: 10,
+    borderRadius: "var(--piq-radius)",
     padding: "10px 14px",
     fontSize: 14,
   },
@@ -488,7 +528,7 @@ const styles = {
     textAlign: "center",
     padding: "8px 4px",
     background: "var(--piq-bg)",
-    borderRadius: 10,
+    borderRadius: "var(--piq-radius)",
   },
   subMetricLabel: {
     fontSize: 11,
@@ -496,8 +536,10 @@ const styles = {
     fontWeight: 600,
   },
   inRangePct: {
-    fontSize: 22,
-    fontWeight: 800,
+    fontSize: 21,
+    fontWeight: 600,
+    fontFamily: "var(--piq-font-mono)",
+    fontVariantNumeric: "tabular-nums",
     marginTop: 4,
   },
   inRangeSub: {
@@ -518,12 +560,16 @@ const styles = {
     width: "100%",
     borderCollapse: "collapse",
     fontSize: 12,
+    fontFamily: "var(--piq-font-mono)",
+    fontVariantNumeric: "tabular-nums",
   },
   th: {
     textAlign: "left",
     padding: "6px 8px",
     color: "var(--piq-text-muted)",
-    fontWeight: 700,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
     borderBottom: "1px solid var(--piq-border)",
   },
   td: {
