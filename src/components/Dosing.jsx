@@ -1,17 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  addDoc,
   collection,
   doc,
   limit,
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { computeAllDoses, DOSING_CAVEAT, DOSING_TABLE } from "../lib/dosing";
 import { RANGES } from "../lib/ranges";
 
 const DOSING_PARAMS = ["fc", "cya", "ta", "ch", "pH"];
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function midpoint(range) {
   return (range.min + range.max) / 2;
@@ -71,6 +77,7 @@ export default function Dosing() {
     pH: "",
   });
   const autoFilledRef = useRef(false);
+  const [loggedDoses, setLoggedDoses] = useState({});
 
   useEffect(() => {
     if (!db) {
@@ -115,6 +122,26 @@ export default function Dosing() {
 
   function resetToLastLog() {
     if (lastLog) setReadings(readingsFromLog(lastLog));
+  }
+
+  async function logDose(dose, paramKey) {
+    if (!db) return;
+    const key = dose.label;
+    setLoggedDoses((prev) => ({ ...prev, [key]: "saving" }));
+    try {
+      await addDoc(collection(db, "doses"), {
+        date: todayISO(),
+        parameter: paramKey,
+        label: dose.label,
+        chemical: dose.chemical,
+        amount: dose.amount,
+        unit: dose.unit,
+        createdAt: serverTimestamp(),
+      });
+      setLoggedDoses((prev) => ({ ...prev, [key]: "logged" }));
+    } catch (err) {
+      setLoggedDoses((prev) => ({ ...prev, [key]: undefined }));
+    }
   }
 
   const volumeGallons = poolConfig && poolConfig.volumeGallons;
@@ -272,6 +299,7 @@ export default function Dosing() {
               )?.parameter;
               const current = currentValues[paramKey];
               const target = targets[paramKey];
+              const logState = loggedDoses[dose.label];
               return (
                 <div key={i} style={styles.doseRow}>
                   <div style={styles.doseHeader}>
@@ -287,6 +315,23 @@ export default function Dosing() {
                       <span style={styles.roughTag}> (rough estimate)</span>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => logDose(dose, paramKey)}
+                    disabled={logState === "saving" || logState === "logged"}
+                    style={{
+                      ...styles.logDoseButton,
+                      ...(logState === "logged"
+                        ? styles.logDoseButtonDone
+                        : {}),
+                    }}
+                  >
+                    {logState === "logged"
+                      ? "Logged — will show on History"
+                      : logState === "saving"
+                      ? "Logging…"
+                      : "Log this dose"}
+                  </button>
                 </div>
               );
             })}
@@ -441,6 +486,26 @@ const styles = {
   roughTag: {
     color: "var(--piq-yellow)",
     fontWeight: 700,
+  },
+  logDoseButton: {
+    marginTop: 10,
+    width: "100%",
+    background: "none",
+    border: "1px solid var(--piq-primary)",
+    borderRadius: "var(--piq-radius)",
+    color: "var(--piq-primary)",
+    fontSize: 12,
+    fontWeight: 600,
+    fontFamily: "var(--piq-font-mono)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    padding: "8px 0",
+    cursor: "pointer",
+  },
+  logDoseButtonDone: {
+    border: "1px solid var(--piq-border)",
+    color: "var(--piq-text-muted)",
+    cursor: "default",
   },
   caveat: {
     marginTop: 14,

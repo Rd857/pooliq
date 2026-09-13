@@ -5,6 +5,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -41,6 +42,7 @@ function withinRangeDate(date, days) {
 export default function History() {
   const [logs, setLogs] = useState(undefined); // undefined = loading
   const [calibration, setCalibration] = useState(undefined); // undefined = loading
+  const [doses, setDoses] = useState(undefined); // undefined = loading
   const [error, setError] = useState(null);
   const [rangeId, setRangeId] = useState("30");
 
@@ -78,6 +80,20 @@ export default function History() {
     return unsub;
   }, []);
 
+  useEffect(() => {
+    if (!db) {
+      setDoses([]);
+      return undefined;
+    }
+    const q = query(collection(db, "doses"), orderBy("date", "asc"));
+    const unsub = onSnapshot(
+      q,
+      (snap) => setDoses(snap.docs.map((d) => d.data())),
+      () => setDoses([])
+    );
+    return unsub;
+  }, []);
+
   const activeDays = RANGE_PRESETS.find((r) => r.id === rangeId)?.days ?? 30;
 
   const filtered = useMemo(() => {
@@ -89,6 +105,17 @@ export default function History() {
         label: l.date ? l.date.slice(5) : "", // MM-DD
       }));
   }, [logs, activeDays]);
+
+  const filteredDoses = useMemo(() => {
+    if (!doses) return [];
+    return doses
+      .filter((d) => withinRange(d.date, activeDays))
+      .map((d) => ({ ...d, label: d.date ? d.date.slice(5) : "" }));
+  }, [doses, activeDays]);
+
+  function dosesForParam(paramKey) {
+    return filteredDoses.filter((d) => d.parameter === paramKey);
+  }
 
   const inRangeStats = useMemo(() => {
     const stats = {};
@@ -217,6 +244,7 @@ export default function History() {
         color="#35E0C7"
         min={RANGES.fc.min}
         max={RANGES.fc.max}
+        doses={dosesForParam("fc")}
       />
 
       <ChartCard
@@ -226,6 +254,7 @@ export default function History() {
         color="#35E0C7"
         min={RANGES.pH.min}
         max={RANGES.pH.max}
+        doses={dosesForParam("pH")}
       />
 
       <ChartCard
@@ -235,6 +264,7 @@ export default function History() {
         color="#35E0C7"
         min={RANGES.ta.min}
         max={RANGES.ta.max}
+        doses={dosesForParam("ta")}
       />
 
       <ChartCard
@@ -244,6 +274,7 @@ export default function History() {
         color="#35E0C7"
         min={RANGES.ch.min}
         max={RANGES.ch.max}
+        doses={dosesForParam("ch")}
       />
 
       <ChartCard
@@ -253,6 +284,7 @@ export default function History() {
         color="#35E0C7"
         min={RANGES.cya.min}
         max={RANGES.cya.max}
+        doses={dosesForParam("cya")}
       />
 
       <DualLineChartCard
@@ -382,7 +414,7 @@ export default function History() {
   );
 }
 
-function ChartCard({ title, data, dataKey, color, min, max }) {
+function ChartCard({ title, data, dataKey, color, min, max, doses }) {
   return (
     <div style={styles.card}>
       <div style={styles.sectionTitle}>{title}</div>
@@ -413,6 +445,21 @@ function ChartCard({ title, data, dataKey, color, min, max }) {
               itemStyle={{ color: "#CFEFEA" }}
             />
             <Legend wrapperStyle={{ fontSize: 12, color: "#5C8481" }} />
+            {doses &&
+              doses.map((dose, i) => (
+                <ReferenceLine
+                  key={i}
+                  x={dose.label}
+                  stroke="#F2B84B"
+                  strokeDasharray="3 3"
+                  label={{
+                    value: `${dose.amount} ${dose.unit}`,
+                    position: "top",
+                    fill: "#F2B84B",
+                    fontSize: 10,
+                  }}
+                />
+              ))}
             <Line
               type="monotone"
               dataKey={dataKey}
