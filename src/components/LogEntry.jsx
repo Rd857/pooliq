@@ -10,7 +10,8 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { getCurrentWeather } from "../lib/ambientWeather";
-import { estimateDashboardState } from "../lib/chlorineModel";
+import { refitModel } from "../lib/modelData";
+import { localDateISO, localTimeHHMM } from "../lib/time";
 
 const NUMERIC_FIELDS = [
   { key: "pH", label: "pH", step: 0.1, placeholder: "7.4" },
@@ -21,16 +22,6 @@ const NUMERIC_FIELDS = [
   { key: "cya", label: "CYA / Stabilizer (ppm)", step: 1, placeholder: "40" },
   { key: "waterTemp", label: "Water Temp (°F)", step: 1, placeholder: "84" },
 ];
-
-function todayISO() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
-}
-
-function nowTimeString() {
-  const d = new Date();
-  return d.toTimeString().slice(0, 5);
-}
 
 export default function LogEntry({ onSaved }) {
   const [values, setValues] = useState({
@@ -43,35 +34,21 @@ export default function LogEntry({ onSaved }) {
     waterTemp: "",
     salt: "",
   });
-  const [date, setDate] = useState(todayISO());
-  const [time, setTime] = useState(nowTimeString());
+  const [date, setDate] = useState(localDateISO());
+  const [time, setTime] = useState(localTimeHHMM());
   const [testedBy, setTestedBy] = useState("Ryan");
   const [notes, setNotes] = useState("");
   const [optionalOpen, setOptionalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
-  const [lastLog, setLastLog] = useState(null);
-
-  // Track the most recent log both to auto-populate water temp and, at
-  // save time, to compare the chlorine-decay model's prediction against
-  // what actually got measured (see the `calibration` write in
-  // handleSubmit below).
+  // Prefill water temp from the previous reading.
   useEffect(() => {
     if (!db) return undefined;
-    const q = query(
-      collection(db, "logs"),
-      orderBy("createdAt", "desc"),
-      limit(1)
-    );
+    const q = query(collection(db, "logs"), orderBy("createdAt", "desc"), limit(1));
     const unsub = onSnapshot(q, (snap) => {
-      if (snap.empty) {
-        setLastLog(null);
-        return;
-      }
-      const last = snap.docs[0].data();
-      setLastLog(last);
-      if (last.waterTemp !== undefined && last.waterTemp !== null) {
+      const last = snap.empty ? null : snap.docs[0].data();
+      if (last && last.waterTemp !== undefined && last.waterTemp !== null) {
         setValues((prev) =>
           prev.waterTemp === "" || prev.waterTemp === undefined
             ? { ...prev, waterTemp: String(last.waterTemp) }
@@ -81,6 +58,11 @@ export default function LogEntry({ onSaved }) {
     });
     return unsub;
   }, []);
+
+  const fcEntered = values.fc === "" ? null : Number(values.fc);
+  const tcEntered = values.tc === "" ? null : Number(values.tc);
+  const tcBelowFc =
+    fcEntered !== null && tcEntered !== null && tcEntered < fcEntered;
 
   const handleChange = (key) => (e) => {
     setValues((prev) => ({ ...prev, [key]: e.target.value }));
@@ -110,7 +92,7 @@ export default function LogEntry({ onSaved }) {
         available: false,
       }));
 
-      await addDoc(collection(db, "logs"), {
+      const reading = {
         date,
         time,
         pH: toNumberOrNull(values.pH),
@@ -121,6 +103,10 @@ export default function LogEntry({ onSaved }) {
         cya: toNumberOrNull(values.cya),
         salt: toNumberOrNull(values.salt),
         waterTemp: toNumberOrNull(values.waterTemp),
+      };
+
+      await addDoc(collection(db, "logs"), {
+        ...reading,
         testedBy: testedBy || "Ryan",
         notes: notes || "",
         weatherAirTempF: weather.available ? weather.tempf ?? null : null,
@@ -136,38 +122,11 @@ export default function LogEntry({ onSaved }) {
         createdAt: serverTimestamp(),
       });
 
-      // Best-effort model-calibration record: compare what the decay model
-      // would have predicted for FC right now (based on the previous log +
-      // current weather) against what was actually just measured. Lets
-      // History show model-vs-actual accuracy over time without ever
-      // blocking the log save itself if this fails or doesn't apply.
-      try {
-        const actualFC = toNumberOrNull(values.fc);
-        if (lastLog && actualFC !== null && weather.available) {
-          const prediction = estimateDashboardState({
-            lastLog,
-            weather,
-            now: new Date(),
-          });
-          if (prediction) {
-            await addDoc(collection(db, "calibration"), {
-              timestamp: serverTimestamp(),
-              actualFC,
-              modelFC: prediction.estimatedFC,
-              hoursElapsed: prediction.hoursElapsed,
-              kTot: prediction.decayRate,
-              uvIndex: weather.uv ?? null,
-              solarRad: weather.solarradiation ?? null,
-              waterTemp: lastLog.waterTemp ?? null,
-            });
-          }
-        }
-      } catch (calibrationErr) {
-        console.warn(
-          "Failed to write calibration record (non-fatal):",
-          calibrationErr
-        );
-      }
+      // Recalibrate with the new reading. Runs in the background (it fetches
+      // station history) and never blocks the save.
+      refitModel().catch((err) =>
+        console.warn("Model refit failed (non-fatal):", err)
+      );
 
       setSaved(true);
       setTimeout(() => {
@@ -240,6 +199,12 @@ export default function LogEntry({ onSaved }) {
             </div>
           ))}
         </div>
+        {tcBelowFc && (
+          <div style={styles.warningBanner}>
+            Total chlorine can't be lower than free chlorine, so one of these
+            readings is off. Worth re-testing; you can still save.
+          </div>
+        )}
       </div>
 
       <div style={styles.card}>
@@ -380,6 +345,15 @@ const styles = {
     fontSize: 12,
     color: "var(--piq-text-muted)",
     marginTop: 4,
+  },
+  warningBanner: {
+    marginTop: 14,
+    background: "var(--piq-yellow-bg)",
+    color: "var(--piq-yellow)",
+    borderRadius: "var(--piq-radius)",
+    padding: "10px 12px",
+    fontSize: 13,
+    lineHeight: 1.45,
   },
   errorBanner: {
     background: "var(--piq-red-bg)",

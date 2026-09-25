@@ -10,14 +10,46 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { computeAllDoses, DOSING_CAVEAT, DOSING_TABLE } from "../lib/dosing";
+import {
+  computeAllDoses,
+  DOSING_CAVEAT,
+  DOSING_TABLE,
+  doseEffect,
+} from "../lib/dosing";
 import { RANGES } from "../lib/ranges";
+import { localDateISO, localTimeHHMM } from "../lib/time";
+import { fToC, ionicStrength, phAdjustment } from "../lib/carbonate";
+
+const isNum = (v) => typeof v === "number" && Number.isFinite(v);
+
+// pH doses from carbonate chemistry (TA-buffered), matching the Forecast tab.
+function carbonatePhDose({ pH, ta, cya, tempF, target, volumeGal, tdsPpm }) {
+  if (![pH, ta, target].every(isNum) || Math.abs(pH - target) < 0.05) return null;
+  const adj = phAdjustment({
+    pH,
+    ta,
+    cya: isNum(cya) ? cya : 0,
+    tempC: fToC(isNum(tempF) ? tempF : 80),
+    I: ionicStrength(tdsPpm),
+    targetPH: target,
+    volumeGal,
+  });
+  if (!adj || adj.amount < 0.5) return null;
+  const rule = DOSING_TABLE.find(
+    (r) => r.label === (adj.chemical === "muriatic" ? "pH (lower)" : "pH (raise)")
+  );
+  return {
+    label: rule.label,
+    chemical: rule.chemical,
+    amount: Math.round(adj.amount * 10) / 10,
+    unit: rule.unit,
+    direction: rule.direction,
+    nonLinear: false,
+    note: `TA → ${Math.round(adj.taAfter)} ppm`,
+  };
+}
 
 const DOSING_PARAMS = ["fc", "cya", "ta", "ch", "pH"];
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function midpoint(range) {
   return (range.min + range.max) / 2;
@@ -78,6 +110,7 @@ export default function Dosing() {
   });
   const autoFilledRef = useRef(false);
   const [loggedDoses, setLoggedDoses] = useState({});
+  const [addedAmounts, setAddedAmounts] = useState({});
 
   useEffect(() => {
     if (!db) {
@@ -127,15 +160,26 @@ export default function Dosing() {
   async function logDose(dose, paramKey) {
     if (!db) return;
     const key = dose.label;
+    const entered = addedAmounts[key];
+    const amount =
+      entered === undefined || entered === "" ? dose.amount : Number(entered);
+    if (!(amount > 0)) return;
+    const now = new Date();
+    const effect = doseEffect({ label: dose.label, amount }, volumeGallons);
     setLoggedDoses((prev) => ({ ...prev, [key]: "saving" }));
     try {
       await addDoc(collection(db, "doses"), {
-        date: todayISO(),
+        date: localDateISO(now),
+        time: localTimeHHMM(now),
+        at: now.toISOString(),
         parameter: paramKey,
         label: dose.label,
         chemical: dose.chemical,
-        amount: dose.amount,
+        amount,
         unit: dose.unit,
+        ppmChange: effect ? effect.change : null,
+        volumeGallons: volumeGallons || null,
+        source: "calculator",
         createdAt: serverTimestamp(),
       });
       setLoggedDoses((prev) => ({ ...prev, [key]: "logged" }));
@@ -186,8 +230,20 @@ export default function Dosing() {
 
   const doses = useMemo(() => {
     if (!volumeGallons) return [];
-    return computeAllDoses(volumeGallons, currentValues, targets);
-  }, [volumeGallons, currentValues, targets]);
+    const others = computeAllDoses(volumeGallons, currentValues, targets).filter(
+      (d) => !d.label.startsWith("pH")
+    );
+    const ph = carbonatePhDose({
+      pH: currentValues.pH,
+      ta: currentValues.ta,
+      cya: currentValues.cya,
+      tempF: lastLog && lastLog.waterTemp,
+      target: targets.pH,
+      volumeGal: volumeGallons,
+      tdsPpm: poolConfig && poolConfig.tdsPpm,
+    });
+    return ph ? [...others, ph] : others;
+  }, [volumeGallons, currentValues, targets, lastLog, poolConfig]);
 
   if (poolConfig === undefined) {
     return <div style={styles.loading}>Loading configuration…</div>;
@@ -308,12 +364,37 @@ export default function Dosing() {
                       {dose.amount} {dose.unit}
                     </span>
                   </div>
-                  <div style={styles.doseSub}>{dose.chemical}</div>
+                  <div style={styles.doseSub}>
+                    {dose.chemical}
+                    {dose.note ? ` · ${dose.note}` : ""}
+                  </div>
                   <div style={styles.doseVariance}>
                     Current: {current ?? "—"} → Target: {target}
                     {dose.nonLinear && (
                       <span style={styles.roughTag}> (rough estimate)</span>
                     )}
+                  </div>
+                  <div style={styles.addedRow}>
+                    <label style={styles.addedLabel} htmlFor={`added-${i}`}>
+                      Amount actually added
+                    </label>
+                    <input
+                      id={`added-${i}`}
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      value={addedAmounts[dose.label] ?? ""}
+                      placeholder={String(dose.amount)}
+                      onChange={(e) =>
+                        setAddedAmounts((prev) => ({
+                          ...prev,
+                          [dose.label]: e.target.value,
+                        }))
+                      }
+                      disabled={logState === "logged"}
+                      style={styles.addedInput}
+                    />
+                    <span style={styles.addedUnit}>{dose.unit}</span>
                   </div>
                   <button
                     type="button"
@@ -486,6 +567,34 @@ const styles = {
   roughTag: {
     color: "var(--piq-yellow)",
     fontWeight: 700,
+  },
+  addedRow: {
+    marginTop: 10,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  addedLabel: {
+    flex: 1,
+    fontSize: 11,
+    color: "var(--piq-text-muted)",
+  },
+  addedInput: {
+    width: 96,
+    border: "1px solid var(--piq-border)",
+    borderRadius: "var(--piq-radius)",
+    background: "var(--piq-card-bg)",
+    color: "var(--piq-text)",
+    padding: "6px 8px",
+    fontSize: 16,
+    fontFamily: "var(--piq-font-mono)",
+    textAlign: "right",
+  },
+  addedUnit: {
+    fontSize: 12,
+    color: "var(--piq-text-muted)",
+    fontFamily: "var(--piq-font-mono)",
+    minWidth: 28,
   },
   logDoseButton: {
     marginTop: 10,

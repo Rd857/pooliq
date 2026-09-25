@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { localDateISO, localTimeHHMM } from "../lib/time";
 
 const CLEANING_TYPES = [
   { id: "brush", label: "Brush" },
@@ -8,19 +9,9 @@ const CLEANING_TYPES = [
   { id: "both", label: "Both" },
 ];
 
-function todayISO() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
-}
-
-function nowTimeString() {
-  const d = new Date();
-  return d.toTimeString().slice(0, 5);
-}
-
 export default function CleaningLog({ onSaved }) {
-  const [date, setDate] = useState(todayISO());
-  const [time, setTime] = useState(nowTimeString());
+  const [date, setDate] = useState(localDateISO());
+  const [time, setTime] = useState(localTimeHHMM());
   const [type, setType] = useState(null);
   const [notes, setNotes] = useState("");
   const [performedBy, setPerformedBy] = useState("Ryan");

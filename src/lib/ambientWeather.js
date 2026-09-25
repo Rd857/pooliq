@@ -98,4 +98,33 @@ export async function getCurrentWeather() {
   };
 }
 
+function normalizeSample(r) {
+  if (!r || typeof r.dateutc !== "number") return null;
+  return {
+    t: r.dateutc,
+    uv: r.uv,
+    solar: r.solarradiation,
+    tempf: r.tempf,
+    dailyrainin: r.dailyrainin,
+  };
+}
+
+/**
+ * Every station reading (~every 5 min) for one UTC day, via the Worker's
+ * edge-cached /history route.
+ *
+ * @param {string} day - "YYYY-MM-DD" (UTC)
+ * @returns {Promise<Array<{t, uv, solar, tempf, dailyrainin}>>}
+ */
+export async function fetchHistoryDay(day) {
+  if (!WORKER_URL) throw new Error("Weather worker not configured.");
+  const url = new URL("/history", WORKER_URL);
+  url.searchParams.set("day", day);
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`Weather history for ${day}: HTTP ${res.status}`);
+  const rows = await res.json();
+  if (!Array.isArray(rows)) throw new Error(`Weather history for ${day}: bad response`);
+  return rows.map(normalizeSample).filter(Boolean);
+}
+
 export const isWeatherConfigured = Boolean(WORKER_URL);

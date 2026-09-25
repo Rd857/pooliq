@@ -11,6 +11,9 @@ export const RANGES = {
   pH: { min: 7.2, max: 7.8, label: "pH", critical: true },
   fc: { min: 1.0, max: 3.0, label: "Free Chlorine", unit: "ppm" },
   tc: { min: 1.0, max: 5.0, label: "Total Chlorine", unit: "ppm" },
+  // TC − FC (chloramines). Above 0.5 means it's time to shock; below 0 means a
+  // test error, since TC can't be lower than FC.
+  cc: { min: 0, max: 0.5, label: "Combined Chlorine", unit: "ppm" },
   ta: { min: 80, max: 120, label: "Total Alkalinity", unit: "ppm" },
   ch: { min: 200, max: 400, label: "Calcium Hardness", unit: "ppm" },
   cya: { min: 30, max: 50, label: "CYA / Stabilizer", unit: "ppm" },

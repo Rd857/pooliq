@@ -4,12 +4,21 @@ import { auth, googleProvider, isFirebaseConfigured } from "./lib/firebase";
 import Dashboard from "./components/Dashboard.jsx";
 import LogEntry from "./components/LogEntry.jsx";
 import CleaningLog from "./components/CleaningLog.jsx";
+import DoseLog from "./components/DoseLog.jsx";
 import History from "./components/History.jsx";
 import Dosing from "./components/Dosing.jsx";
+import Forecast from "./components/Forecast.jsx";
+
+const LOG_MODES = [
+  { id: "chemistry", label: "Reading" },
+  { id: "dose", label: "Dose" },
+  { id: "cleaning", label: "Cleaning" },
+];
 
 const TABS = [
   { id: "dashboard", label: "Dashboard", icon: "\u{1F4CA}" }, // 📊
   { id: "log", label: "Log", icon: "\u{1F4DD}" }, // 📝
+  { id: "forecast", label: "Forecast", icon: "\u{1F52E}" }, // 🔮
   { id: "history", label: "History", icon: "\u{1F4C8}" }, // 📈
   { id: "dosing", label: "Dosing", icon: "\u{1F9EA}" }, // 🧪
 ];
@@ -119,34 +128,33 @@ export default function App() {
       </header>
 
       <main style={styles.main}>
-        {activeTab === "dashboard" && <Dashboard />}
+        {activeTab === "dashboard" && (
+          <Dashboard onOpenForecast={() => setActiveTab("forecast")} />
+        )}
+        {activeTab === "forecast" && <Forecast />}
         {activeTab === "log" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={styles.logModeRow}>
-              <button
-                onClick={() => setLogMode("chemistry")}
-                style={{
-                  ...styles.logModeButton,
-                  ...(logMode === "chemistry"
-                    ? styles.logModeButtonActive
-                    : {}),
-                }}
-              >
-                Chemistry Reading
-              </button>
-              <button
-                onClick={() => setLogMode("cleaning")}
-                style={{
-                  ...styles.logModeButton,
-                  ...(logMode === "cleaning" ? styles.logModeButtonActive : {}),
-                }}
-              >
-                Cleaning
-              </button>
+              {LOG_MODES.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setLogMode(m.id)}
+                  style={{
+                    ...styles.logModeButton,
+                    ...(logMode === m.id ? styles.logModeButtonActive : {}),
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
             </div>
-            {logMode === "chemistry" ? (
+            {logMode === "chemistry" && (
               <LogEntry onSaved={() => setActiveTab("dashboard")} />
-            ) : (
+            )}
+            {logMode === "dose" && (
+              <DoseLog onSaved={() => setActiveTab("dashboard")} />
+            )}
+            {logMode === "cleaning" && (
               <CleaningLog onSaved={() => setActiveTab("dashboard")} />
             )}
           </div>

@@ -16,6 +16,8 @@
 // parameter by `changePerUnit` in a 10,000 gallon pool," and we scale
 // linearly by both pool size and by how far off target we are.
 
+import { fromLocalDateTime, toDate } from "./time";
+
 /**
  * @typedef {object} DosingRule
  * @property {string} parameter - key matching a log field (fc, cya, ta, ch, pH)
@@ -79,8 +81,8 @@ export const DOSING_TABLE = [
   {
     parameter: "pH",
     label: "pH (lower)",
-    chemical: "Muriatic acid",
-    unit: "oz",
+    chemical: "Muriatic acid (31.45%)",
+    unit: "fl oz",
     changePerUnit: 0.2, // pH units lowered, approximate/non-linear, also affects TA
     referenceAmount: 10, // oz per 10,000 gal to lower pH by ~0.2
     direction: "decrease",
@@ -152,6 +154,57 @@ export function computeAllDoses(volumeGallons, currentValues, targetMidpoints) {
       targetMidpoints[rule.parameter]
     )
   ).filter(Boolean);
+}
+
+/**
+ * Inverse of computeDose: how much a given amount of a chemical moves its
+ * parameter in a pool of `volumeGallons`. Signed — negative for "decrease"
+ * rules (e.g. muriatic acid lowering pH).
+ *
+ * @param {{label?: string, parameter?: string, chemical?: string, amount: number}} dose
+ * @param {number} volumeGallons
+ * @returns {{parameter: string, change: number}|null}
+ */
+export function doseEffect(dose, volumeGallons) {
+  if (!dose || !volumeGallons || volumeGallons <= 0) return null;
+  const amount = Number(dose.amount);
+  if (!(amount > 0)) return null;
+  const rule =
+    DOSING_TABLE.find((r) => r.label === dose.label) ||
+    DOSING_TABLE.find(
+      (r) => r.parameter === dose.parameter && r.chemical === dose.chemical
+    );
+  if (!rule) return null;
+  const scale = volumeGallons / 10000;
+  const change = (amount / (rule.referenceAmount * scale)) * rule.changePerUnit;
+  return {
+    parameter: rule.parameter,
+    change: rule.direction === "decrease" ? -change : change,
+  };
+}
+
+/**
+ * Firestore dose doc → {atMs, parameter, label, chemical, amount, unit, ppm}.
+ * Prefers the ppm change stored at log time; older docs are recomputed from
+ * the current pool volume.
+ */
+export function normalizeDose(doc, volumeGallons) {
+  const at =
+    toDate(doc.at) || fromLocalDateTime(doc.date, doc.time) || toDate(doc.createdAt);
+  if (!at) return null;
+  const effect =
+    typeof doc.ppmChange === "number"
+      ? { parameter: doc.parameter, change: doc.ppmChange }
+      : doseEffect(doc, volumeGallons);
+  return {
+    atMs: at.getTime(),
+    parameter: (effect && effect.parameter) || doc.parameter || null,
+    label: doc.label ?? null,
+    chemical: doc.chemical ?? null,
+    amount: doc.amount ?? null,
+    unit: doc.unit ?? null,
+    ppm: effect ? effect.change : null,
+  };
 }
 
 /** Standard caveat to show anywhere a dose amount is displayed. */

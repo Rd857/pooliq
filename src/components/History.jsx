@@ -13,6 +13,8 @@ import {
 } from "recharts";
 import { db } from "../lib/firebase";
 import { RANGES, rangeStatus } from "../lib/ranges";
+import { shareOrDownloadCsv } from "../lib/csv";
+import { buildExport, EXPORT_KINDS } from "../lib/exportData";
 
 const RANGE_PRESETS = [
   { id: "30", label: "30 days", days: 30 },
@@ -31,20 +33,13 @@ function withinRange(dateStr, days) {
   return entryDate >= cutoff;
 }
 
-function withinRangeDate(date, days) {
-  if (!days) return true;
-  if (!date || Number.isNaN(date.getTime())) return true;
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-  return date >= cutoff;
-}
-
 export default function History() {
   const [logs, setLogs] = useState(undefined); // undefined = loading
-  const [calibration, setCalibration] = useState(undefined); // undefined = loading
   const [doses, setDoses] = useState(undefined); // undefined = loading
+  const [cleanings, setCleanings] = useState([]);
   const [error, setError] = useState(null);
   const [rangeId, setRangeId] = useState("30");
+  const [exportStatus, setExportStatus] = useState(null);
 
   useEffect(() => {
     if (!db) {
@@ -66,18 +61,16 @@ export default function History() {
     return unsub;
   }, []);
 
+  // Only needed for CSV export; loaded up front so the share sheet can open
+  // straight from the tap (iOS rejects it after an async fetch).
   useEffect(() => {
-    if (!db) {
-      setCalibration([]);
-      return undefined;
-    }
-    const q = query(collection(db, "calibration"), orderBy("timestamp", "asc"));
-    const unsub = onSnapshot(
+    if (!db) return undefined;
+    const q = query(collection(db, "cleanings"), orderBy("createdAt", "asc"));
+    return onSnapshot(
       q,
-      (snap) => setCalibration(snap.docs.map((d) => d.data())),
-      () => setCalibration([])
+      (snap) => setCleanings(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      () => setCleanings([])
     );
-    return unsub;
   }, []);
 
   useEffect(() => {
@@ -88,7 +81,7 @@ export default function History() {
     const q = query(collection(db, "doses"), orderBy("date", "asc"));
     const unsub = onSnapshot(
       q,
-      (snap) => setDoses(snap.docs.map((d) => d.data())),
+      (snap) => setDoses(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
       () => setDoses([])
     );
     return unsub;
@@ -135,39 +128,26 @@ export default function History() {
     return stats;
   }, [filtered]);
 
-  const filteredCalibration = useMemo(() => {
-    if (!calibration) return [];
-    return calibration
-      .filter((c) => {
-        const d = c.timestamp && c.timestamp.toDate ? c.timestamp.toDate() : null;
-        return withinRangeDate(d, activeDays);
-      })
-      .map((c) => {
-        const d = c.timestamp && c.timestamp.toDate ? c.timestamp.toDate() : null;
-        const error =
-          c.actualFC !== undefined && c.modelFC !== undefined
-            ? c.actualFC - c.modelFC
-            : null;
-        return {
-          ...c,
-          error,
-          label: d
-            ? `${d.getMonth() + 1}/${d.getDate()}`
-            : "",
-        };
-      });
-  }, [calibration, activeDays]);
-
-  const calibrationSummary = useMemo(() => {
-    const errors = filteredCalibration
-      .map((c) => c.error)
-      .filter((e) => e !== null && !Number.isNaN(e));
-    if (errors.length === 0) return null;
-    const meanError = errors.reduce((a, b) => a + b, 0) / errors.length;
-    const meanAbsError =
-      errors.reduce((a, b) => a + Math.abs(b), 0) / errors.length;
-    return { meanError, meanAbsError, count: errors.length };
-  }, [filteredCalibration]);
+  async function handleExport(kind) {
+    const rows = {
+      readings: logs,
+      doses,
+      cleanings,
+    }[kind];
+    const { filename, csv } = buildExport(kind, rows);
+    try {
+      const result = await shareOrDownloadCsv(filename, csv);
+      setExportStatus(
+        result === "cancelled"
+          ? null
+          : `${result === "shared" ? "Shared" : "Downloaded"} ${filename} (${
+              (rows || []).length
+            } rows)`
+      );
+    } catch (err) {
+      setExportStatus(`Export failed: ${err.message}`);
+    }
+  }
 
   if (logs === undefined) {
     return <div style={styles.loading}>Loading history…</div>;
@@ -297,118 +277,23 @@ export default function History() {
       />
 
       <div style={styles.card}>
-        <div style={styles.sectionTitle}>Decay Model Accuracy</div>
-        {filteredCalibration.length === 0 ? (
-          <div style={{ color: "var(--piq-text-muted)", fontSize: 13 }}>
-            No calibration data yet — this fills in automatically each time
-            you log a reading after a previous one, comparing the
-            Dashboard's predicted FC (based on the last log + weather) to
-            what you actually measured.
-          </div>
-        ) : (
-          <>
-            {calibrationSummary && (
-              <div style={styles.calibrationSummary}>
-                Average error:{" "}
-                <strong>
-                  {calibrationSummary.meanError >= 0 ? "+" : ""}
-                  {calibrationSummary.meanError.toFixed(2)} ppm
-                </strong>{" "}
-                ({calibrationSummary.meanError >= 0
-                  ? "model tends to predict low"
-                  : "model tends to predict high"}
-                ), mean absolute error{" "}
-                <strong>{calibrationSummary.meanAbsError.toFixed(2)} ppm</strong>{" "}
-                across {calibrationSummary.count} comparisons.
-              </div>
-            )}
-            <div style={{ width: "100%", height: 220, marginTop: 12 }}>
-              <ResponsiveContainer>
-                <LineChart
-                  data={filteredCalibration}
-                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--piq-border)" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11, fill: "#5C8481" }}
-                    stroke="#5C8481"
-                  />
-                  <YAxis tick={{ fontSize: 11, fill: "#5C8481" }} stroke="#5C8481" />
-                  <Tooltip
-                    contentStyle={{
-                      background: "#101C1F",
-                      border: "1px solid var(--piq-border)",
-                      borderRadius: 4,
-                    }}
-                    labelStyle={{ color: "#5C8481" }}
-                    itemStyle={{ color: "#CFEFEA" }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 12, color: "#5C8481" }} />
-                  <Line
-                    type="monotone"
-                    dataKey="actualFC"
-                    stroke="#35E0C7"
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                    connectNulls
-                    name="Actual FC"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="modelFC"
-                    stroke="#5C8481"
-                    strokeWidth={2}
-                    strokeDasharray="4 3"
-                    dot={{ r: 3 }}
-                    connectNulls
-                    name="Model FC"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div style={styles.calibrationTableWrap}>
-              <table style={styles.calibrationTable}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>Date</th>
-                    <th style={styles.th}>Actual</th>
-                    <th style={styles.th}>Model</th>
-                    <th style={styles.th}>Error</th>
-                    <th style={styles.th}>UV</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCalibration
-                    .slice(-10)
-                    .reverse()
-                    .map((c, i) => (
-                      <tr key={i}>
-                        <td style={styles.td}>{c.label}</td>
-                        <td style={styles.td}>{c.actualFC?.toFixed(2)}</td>
-                        <td style={styles.td}>{c.modelFC?.toFixed(2)}</td>
-                        <td style={styles.td}>
-                          {c.error !== null ? c.error.toFixed(2) : "—"}
-                        </td>
-                        <td style={styles.td}>
-                          {c.uvIndex !== undefined && c.uvIndex !== null
-                            ? c.uvIndex
-                            : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-            <div style={styles.caveat}>
-              Model FC is what the Dashboard would have predicted for FC at
-              the moment of this log, based on the previous reading and
-              weather since. Scan the UV column alongside the error column
-              to eyeball whether sunnier days correlate with faster
-              real-world decay than the model assumes.
-            </div>
-          </>
-        )}
+        <div style={styles.sectionTitle}>Export CSV</div>
+        <div style={styles.exportGrid}>
+          {EXPORT_KINDS.map((k) => (
+            <button
+              key={k.id}
+              type="button"
+              onClick={() => handleExport(k.id)}
+              style={styles.exportButton}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+        <div style={styles.exportHint}>
+          {exportStatus ||
+            "All-time data, not just the range selected above. On iPhone this opens the share sheet (Save to Files, AirDrop, Mail)."}
+        </div>
       </div>
     </div>
   );
@@ -594,34 +479,29 @@ const styles = {
     color: "var(--piq-text-muted)",
     marginTop: 2,
   },
-  calibrationSummary: {
-    fontSize: 13,
-    color: "var(--piq-text)",
-    lineHeight: 1.5,
+  exportGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 8,
   },
-  calibrationTableWrap: {
-    marginTop: 14,
-    overflowX: "auto",
-  },
-  calibrationTable: {
-    width: "100%",
-    borderCollapse: "collapse",
+  exportButton: {
+    border: "1px solid var(--piq-primary)",
+    background: "transparent",
+    color: "var(--piq-primary)",
+    borderRadius: "var(--piq-radius)",
+    padding: "10px 0",
     fontSize: 12,
-    fontFamily: "var(--piq-font-mono)",
-    fontVariantNumeric: "tabular-nums",
-  },
-  th: {
-    textAlign: "left",
-    padding: "6px 8px",
-    color: "var(--piq-text-muted)",
     fontWeight: 600,
+    fontFamily: "var(--piq-font-mono)",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    borderBottom: "1px solid var(--piq-border)",
+    cursor: "pointer",
   },
-  td: {
-    padding: "6px 8px",
-    borderBottom: "1px solid var(--piq-border)",
+  exportHint: {
+    marginTop: 10,
+    fontSize: 12,
+    color: "var(--piq-text-muted)",
+    lineHeight: 1.45,
   },
   caveat: {
     marginTop: 14,
