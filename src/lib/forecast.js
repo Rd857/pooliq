@@ -15,12 +15,11 @@ import {
 } from "./carbonate";
 import {
   buildFCIntervals,
-  FC_FLOOR_PPM,
+  fcTarget,
   fitFC,
   forecastFC,
   practicalFloor,
   readingTime,
-  TARGET_FC_CYA_RATIO,
 } from "./chlorineModel";
 import { DOSING_TABLE, normalizeDose } from "./dosing";
 import { buildPHIntervals, fitPH, forecastPH } from "./phModel";
@@ -213,10 +212,7 @@ export function runModel({
     : null;
 
   // Chlorine to add now to reach the target.
-  const targetFC =
-    isNum(cyaNow) && cyaNow > 0
-      ? Math.max(floor + 1, TARGET_FC_CYA_RATIO * cyaNow)
-      : FC_FLOOR_PPM + 2;
+  const targetFC = fcTarget(cyaNow);
   const fcRule = DOSING_TABLE.find((r) => r.parameter === "fc");
   const chlorineNow =
     fcForecast && x.volume

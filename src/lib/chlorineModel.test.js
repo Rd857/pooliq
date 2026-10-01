@@ -2,6 +2,7 @@ import {
   buildFCIntervals,
   buildSegments,
   cyaShield,
+  fcTarget,
   fitFC,
   forecastFC,
   practicalFloor,
@@ -105,6 +106,12 @@ describe("segment integration", () => {
     const env = constEnv(0);
     const seg = buildSegments(0, 10 * HOUR_MS, env, [{ atMs: 4 * HOUR_MS, ppm: 2 }]);
     close(simulateSegments(seg, 0.05, 0.01, 3).c, 3 + 2 - 0.05 * 10);
+  });
+
+  test("FC target is the warranty max unless CYA pushes the floor above it", () => {
+    expect(fcTarget(30)).toBe(3);
+    expect(fcTarget(undefined)).toBe(3);
+    expect(fcTarget(50)).toBeCloseTo(3.75);
   });
 
   test("CYA shielding and temperature scale the right terms", () => {

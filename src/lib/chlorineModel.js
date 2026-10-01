@@ -22,6 +22,7 @@
 // day-to-day load. Intervals are scored before they update the posterior,
 // so the reported accuracy is honest out-of-sample forecasting.
 
+import { RANGES } from "./ranges";
 import { fromLocalDateTime, toDate } from "./time";
 import { HOUR_MS } from "./weatherHourly";
 
@@ -30,8 +31,6 @@ import { HOUR_MS } from "./weatherHourly";
 export const FC_FLOOR_PPM = 1.0;
 /** Minimum FC as a fraction of CYA; CYA binds most FC (CYA 40 → FC 3). */
 export const MIN_FC_CYA_RATIO = 0.075;
-/** Typical FC target as a fraction of CYA. */
-export const TARGET_FC_CYA_RATIO = 0.115;
 
 /** Organic demand, ppm/h at 80 °F. Median ≈ 0.18 ppm over a 12 h night. */
 export const K_ORG_PRIOR = { median: 0.015, sigmaLog: 0.9 };
@@ -77,6 +76,14 @@ export function practicalFloor(cya) {
   return isNum(cya) && cya > 0
     ? Math.max(FC_FLOOR_PPM, MIN_FC_CYA_RATIO * cya)
     : FC_FLOOR_PPM;
+}
+
+/**
+ * FC to dose up to: the warranty max, so each dose lasts longest — unless
+ * CYA pushes the sanitizing floor above it, in which case sanitizing wins.
+ */
+export function fcTarget(cya) {
+  return Math.max(RANGES.fc.max, practicalFloor(cya));
 }
 
 const phi = (cya) => 1 / (1 + Math.max(0, cya) / CYA_HALF_BINDING);

@@ -16,6 +16,7 @@ import {
   DOSING_TABLE,
   doseEffect,
 } from "../lib/dosing";
+import { fcTarget } from "../lib/chlorineModel";
 import { RANGES } from "../lib/ranges";
 import { localDateISO, localTimeHHMM } from "../lib/time";
 import { fToC, ionicStrength, phAdjustment } from "../lib/carbonate";
@@ -190,13 +191,19 @@ export default function Dosing() {
 
   const volumeGallons = poolConfig && poolConfig.volumeGallons;
 
+  // CYA aims for the bottom of the warranty range: lower CYA lowers the FC
+  // needed to sanitize, so FC can sit inside the warranty's 1–3 ppm band.
+  // FC aims for the top of that band so each dose lasts longest.
+  const cyaReading = readings.cya === "" ? undefined : Number(readings.cya);
   const defaultTargets = useMemo(() => {
     const t = {};
     DOSING_PARAMS.forEach((p) => {
       t[p] = midpoint(RANGES[p]);
     });
+    t.cya = RANGES.cya.min;
+    t.fc = fcTarget(cyaReading);
     return t;
-  }, []);
+  }, [cyaReading]);
 
   const targets = useMemo(() => {
     const t = {};
